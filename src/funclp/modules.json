@@ -1,1 +1,8 @@
-{}
+{
+    "ufunc": {
+        "date": "2025-12-13",
+        "description": "Decorator class defining universal function factory object from python kernel function, will create kernels, vectorized functions, jitted functions, stack functions, all on CPU / Parallel CPU / GPU.",
+        "module": "modules/ufunc_LP/ufunc",
+        "object": "ufunc"
+    }
+}

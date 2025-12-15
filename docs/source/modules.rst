@@ -11,3 +11,4 @@ Here are the references to the various modules to import in **funcLP**.
    :maxdepth: 1
    :caption: Modules
 
+   ufunc
