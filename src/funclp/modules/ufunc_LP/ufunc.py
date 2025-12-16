@@ -18,6 +18,10 @@ import inspect
 import numpy as np
 import numba as nb
 from numba import cuda
+try :
+    import cupy as cp
+except ImportError :
+    cp = None
 
 
 
@@ -31,11 +35,6 @@ class ufunc() :
     >>> from funclp import ufunc
     >>> import numpy as np
     ...
-    >>> class MyClass() :
-    ...     @ufunc() # <-- HERE IS THE DECORATOR TO USE
-    ...     def myfunc(x, /, *, a, b) :
-    ...         return a * x + b
-    ... 
     '''
 
     def __init__(self, **kwargs) :
@@ -52,7 +51,9 @@ class ufunc() :
         self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
         self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.KEYWORD_ONLY]
         self.inputs = ', '.join([key for key in parameters.keys()])
-        self.indexes = ', '.join([f'{key}[model, point]' for key in parameters.keys()])
+        self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables])
+        self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data])
+        self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters])
   
         return self
 
@@ -96,9 +97,9 @@ def func({self.inputs}, out) :
     nmodels, npoints = out.shape
     for model in nb.prange(nmodels) :
         for point in range(npoints) :
-            out[model, point] = kernel({self.indexes})
+            out[model, point] = kernel({self.indexes_variables}, {self.indexes_data}, {self.indexes_parameters})
 '''
-                glob = {'nb': nb, 'kernel': getattr(cls, f'cpukernel_{name}')}
+                glob = {'nb': nb, 'kernel': getattr(instance, f'cpukernel_{name}')}
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
@@ -116,9 +117,9 @@ def func({self.inputs}, out) :
     nmodels, npoints = out.shape
     model, point = nb.cuda.grid(2)
     if model < nmodels and point < npoints :
-        newout[model, point] = kernel({self.indexes})
+        out[model, point] = kernel({self.indexes_variables}, {self.indexes_data}, {self.indexes_parameters})
 '''
-                glob = {'nb': nb, 'kernel': getattr(cls, f'gpukernel_{name}')}
+                glob = {'nb': nb, 'kernel': getattr(instance, f'gpukernel_{name}')}
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
@@ -131,50 +132,79 @@ def func({self.inputs}, out) :
         # Universal functions
 
         def cpu(instance, *args, **kwargs):
-            variables, data, parameters = self.variables_data_parameters(instance, *args, **kwargs) # Get various arrays from inputs
-            nmodels = self.parameters2nmodels(parameters)
-            jitted = getattr(cls, f'cpujit_{name}')
-            return send_to_jitted(*args, jitted, )
+            variables, data, parameters, out, data_shape, _, _ = self.use_inputs(*args, cuda=False, **kwargs)
+            jitted = getattr(instance, f'cpujit_{name}')
+            jitted(*variables, *data, *parameters, out)
+            out = out.reshape(data_shape)
+            return out
         setattr(cls, f'cpu_{name}', cpu)
 
-        def gpu(instance):
-            pass # TODO
-        setattr(cls, f'cpu_{name}', gpu)
+        def gpu(instance, *args, **kwargs):
+            variables, data, parameters, out, data_shape, was_on_gpu, (blocks_per_grid, threads_per_block) = self.use_inputs(*args, cuda=True, **kwargs)
+            jitted = getattr(instance, f'gpujit_{name}')[blocks_per_grid, threads_per_block]
+            jitted(*variables, *data, *parameters, out)
+            out = out.reshape(data_shape)
+            return cp.asarray(out) if was_on_gpu else cp.asnumpy(out)
+        setattr(cls, f'gpu_{name}', gpu)
 
 
 
     # Helpers
 
-    def variables_data_parameters(self, instance, *args, **kwargs) :
-        '''This function separates variables, data and parameters from input values'''
+    def use_inputs(self, *args, cuda=False, **kwargs) :
+        '''This function converts inputs into all the needed parameters for the jitted functions'''
+
+        # Checking Cuda
+        was_on_gpu = any([isinstance(arr, cp.ndarray) for arr in list(args) + list(kwargs.values())]) if cuda else False
+        asarray = np.asarray if cp is None else cp.asarray if cuda else cp.asnumpy
+        xp = cp if cuda else np
+        
+        # Get dtype
+        dtype = xp.result_type(*args, *kwargs.values())
+
+        # Separate inputs
         bound = self.signature.bind(*args, **kwargs)
         bound.apply_defaults()
-        variables = [bound.arguments[key] for key in self.variables]
-        data = [bound.arguments[key] for key in self.data]
-        parameters = [bound.arguments[key] for key in self.parameters]
-        return variables, data, parameters
+        variables = [asarray(bound.arguments[key]).astype(dtype) for key in self.variables]
+        data = [asarray(bound.arguments[key]).astype(dtype) for key in self.data]
+        parameters = [asarray(bound.arguments[key]).astype(dtype) for key in self.parameters]
     
-    def parameters2nmodels(self, parameters, data) :
-        '''This function calculates the number of models'''
-        data_shape = np.broadcast_shapes(*[datum.shape for datum in data]) if len(data) > 0 else None
-        nmodels = np.broadcast_shapes(*[parameter.shape for parameter in parameters])[0] if len(parameters) > 0 else data_shape[0]
-        
-        # Error
-        if data_shape is not None and data_shape[0] != nmodels :
-            raise ValueError('data shape does not match with parameters')
-        return nmodels
+        # Get shapes
+        variable_shapes = {arr.shape for arr in variables if arr.size != 1}
+        data_shapes = {arr.shape for arr in data if arr.size != 1}
+        parameters_shapes = {arr.shape for arr in parameters if arr.size != 1}
+        if len(variable_shapes) > 1:
+            raise ValueError(f"Inconsistent variable shapes: {variable_shapes}")
+        if len(data_shapes) > 1:
+            raise ValueError(f"Inconsistent data shapes: {data_shapes}")
+        if len(parameters_shapes) > 1:
+            raise ValueError(f"Inconsistent parameters shapes: {parameters_shapes}")
+        data_shape = next(iter(data_shapes), (1, 1))
+        variable_shape = next(iter(variable_shapes), data_shape[1:])
+        parameters_shape = next(iter(parameters_shapes), (data_shape[0],) )
+    
+        # Get npoints and nmodels
+        nmodels = parameters_shape[0]
+        npoints = np.prod(variable_shape)
+        if data_shape[0] != 1 and (data_shape[0],) != parameters_shape :
+            raise ValueError(f"Inconsistent data / parameters shape compatibility: {data_shapes} / {parameters_shape}")
+        if np.prod(data_shape[1:]) != 1 and data_shape[1:] != variable_shape :
+            raise ValueError(f"Inconsistent data / variables shape compatibility: {data_shapes} / {variable_shape}")
+        data_shape = parameters_shape + variable_shape
 
-    def variables2npoints(self, variables, data) :
-        '''This function calculates the number of points'''
-        data_shape = np.broadcast_shapes(*[datum.shape for datum in data]) if len(data) > 0 else None
-        shape = np.broadcast_shapes(*[variable.shape for variable in variables]) if len(parameters) > 0 else data_shape[0]
-        
-        # Error
-        if data_shape is not None and data_shape[0] != nmodels :
-            raise ValueError('data shape does not match with parameters')
-        return nmodels
+        # Arrays
+        variables = [xp.ascontiguousarray(arr.reshape(npoints)) if arr.size > 1 else xp.full(npoints, arr) for arr in variables]
+        data = [xp.ascontiguousarray(arr.reshape((nmodels, npoints))) if arr.size > 1 else xp.full((nmodels, npoints), arr) for arr in data]
+        parameters = [xp.ascontiguousarray(arr.reshape(nmodels)) if arr.size > 1 else xp.full(nmodels, arr) for arr in parameters]
+        out = xp.empty(shape=(nmodels, npoints), dtype=dtype) # output shape
 
-        
+        # GPU specifications
+        threads_per_block = 16, 16
+        blocks_per_grid = (nmodels + threads_per_block[0] - 1) // threads_per_block[0], (npoints + threads_per_block[1] - 1) // threads_per_block[1]
+
+        return variables, data, parameters, out, data_shape, was_on_gpu, (blocks_per_grid, threads_per_block)
+
+
 
     # Call
     def __get__(self, instance, owner):
@@ -185,29 +215,6 @@ def func({self.inputs}, out) :
             return getattr(instance, f'cpu_{self.name}')
         return self
 
-
-
-# Pass arrays CPU <> GPU
-def to_gpu(arr):
-    if isinstance(arr, np.ndarray): # 1. Already a NumPy array (CPU)
-        return cuda.to_device(arr, stream=stream)
-    if isinstance(arr, cuda.cudadrv.devicearray.DeviceNDArray): # 2. Already a Numba device array
-        return arr
-
-    # 3. Other CUDA-aware arrays (CuPy, etc.)
-    if hasattr(arr, "__cuda_array_interface__"):
-        return cuda.as_cuda_array(arr)
-
-    # 4. Fallback: convert to NumPy then copy
-    return cuda.to_device(np.asarray(arr), stream=stream)
-def to_cpu(arr):
-    if isinstance(arr, np.ndarray): # Case 1: Already a NumPy array
-        return arr
-    if isinstance(arr, cuda.cudadrv.devicearray.DeviceNDArray): # Case 2: Numba DeviceNDArray
-        return arr.copy_to_host()
-    if hasattr(arr, "__cuda_array_interface__"): # Case 3: Other CUDA arrays (CuPy, etc.)
-        return cuda.as_cuda_array(arr).copy_to_host()
-    return np.asarray(arr) # Case 4: Fallback (Python sequence, scalar, etc.)
 
 # %% Test function run
 if __name__ == "__main__":
