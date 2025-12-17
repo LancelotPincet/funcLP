@@ -5,7 +5,7 @@
 Features
 ========
 
-In this section, we will explore the various features behind **funcLP**.
+In this section, we will explore the various features behind **template_name**.
 
 1. First, we will talk about the :ref:`essential features <essential_features>` you must know to use this library.
 2. Then, we will see :ref:`standard features <standard_features>` you might often need when you start using the library a bit more in-depth.

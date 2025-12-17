@@ -5,7 +5,7 @@
 Concepts
 ========
 
-In this section, we will explain the concepts behind the code design of **funcLP**.
+In this section, we will explain the concepts behind the code design of **template_name**.
 
 1. First, we will describe the :ref:`main module <main_module>` at the center of the library.
 2. Then, we will see how to :ref:`manipulate this module <possible_manipulations>` as a simple user.

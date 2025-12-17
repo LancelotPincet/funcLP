@@ -14,6 +14,7 @@ Decorator class defining universal function factory object from python kernel fu
 
 # %% Libraries
 from corelp import selfkwargs
+from funclp import use_inputs, use_shapes, use_cuda, use_broadcasting
 import inspect
 import numpy as np
 import numba as nb
@@ -34,11 +35,32 @@ class ufunc() :
     --------
     >>> from funclp import ufunc
     >>> import numpy as np
+    ... 
+    >>> class MyClass() :
+    ...     @ufunc() # <-- HERE IS THE DECORATOR TO USE ON A SCALAR METHOD
+    ...     def myfunc(x, y, /, constant, *, a, b) :
+    ...         # Positional only : variables of size npoints, all broadcastable together
+    ...         # Positional and keyword : data of same shape as output
+    ...         # Keyword only : parameters of size nmodels, all broadcastable together
+    ...         return a * x + b * y + constant
+    ...     cuda = False
+    ... 
+    >>> instance = MyClass()
+    ... 
+    >>> x = np.arange(20).reshape((1, 20)) # Example of variables that can be broadcasted together
+    >>> y = np.arange(20).reshape((20, 1)) # Example of variables that can be broadcasted together
+    >>> constant = np.ones((5, 20, 20)) # Example of data with full shape
+    >>> a = np.arange(5) # Example of parameter vector
+    >>> b = 0.5 # Example of scalar use
+    >>> cpu_out = instance.myfunc(x, y, constant, a=a, b=b)
+    >>> instance.cuda = True
+    >>> gpu_out = instance.myfunc(x, y, constant=constant, a=a, b=b)
+
     ...
     '''
 
-    def __init__(self, **kwargs) :
-        selfkwargs(self, kwargs)
+    def __init__(self, *, main=False) :
+        self.main = main
 
     def __call__(self, function):
         '''Decorator logic'''
@@ -56,6 +78,10 @@ class ufunc() :
         self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters])
   
         return self
+
+    def __get__(self, instance, owner):
+        '''function called'''
+        return getattr(instance, f'_{self.name}') if instance else self
 
 
 
@@ -88,8 +114,8 @@ class ufunc() :
         # Jitted functions
 
         @property
-        def cpujit(instance):
-            func = getattr(cls, f'_cpujit_{name}', None)
+        def cpu(instance):
+            func = getattr(cls, f'_cpu_{name}', None)
             if func is None:
                 string = f'''
 @nb.njit()
@@ -103,13 +129,13 @@ def func({self.inputs}, out) :
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
-                setattr(cls, f'_cpujit_{name}', func)
+                setattr(cls, f'_cpu_{name}', func)
             return func
-        setattr(cls, f'cpujit_{name}', cpujit)
+        setattr(cls, f'cpu_{name}', cpu)
 
         @property
-        def gpujit(instance):
-            func = getattr(cls, f'_gpujit_{name}', None)
+        def gpu(instance):
+            func = getattr(cls, f'_gpu_{name}', None)
             if func is None:
                 string = f'''
 @nb.cuda.jit()
@@ -123,97 +149,100 @@ def func({self.inputs}, out) :
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
-                setattr(cls, f'_gpujit_{name}', func)
+                setattr(cls, f'_gpu_{name}', func)
             return func
-        setattr(cls, f'gpujit_{name}', gpujit)
-
-
-
-        # Universal functions
-
-        def cpu(instance, *args, **kwargs):
-            variables, data, parameters, out, data_shape, _, _ = self.use_inputs(*args, cuda=False, **kwargs)
-            jitted = getattr(instance, f'cpujit_{name}')
-            jitted(*variables, *data, *parameters, out)
-            out = out.reshape(data_shape)
-            return out
-        setattr(cls, f'cpu_{name}', cpu)
-
-        def gpu(instance, *args, **kwargs):
-            variables, data, parameters, out, data_shape, was_on_gpu, (blocks_per_grid, threads_per_block) = self.use_inputs(*args, cuda=True, **kwargs)
-            jitted = getattr(instance, f'gpujit_{name}')[blocks_per_grid, threads_per_block]
-            jitted(*variables, *data, *parameters, out)
-            out = out.reshape(data_shape)
-            return cp.asarray(out) if was_on_gpu else cp.asnumpy(out)
         setattr(cls, f'gpu_{name}', gpu)
 
 
 
-    # Helpers
+        # Universal function
 
-    def use_inputs(self, *args, cuda=False, **kwargs) :
-        '''This function converts inputs into all the needed parameters for the jitted functions'''
+        def func(instance, *args, **kwargs):
 
-        # Checking Cuda
-        was_on_gpu = any([isinstance(arr, cp.ndarray) for arr in list(args) + list(kwargs.values())]) if cuda else False
-        asarray = np.asarray if cp is None else cp.asarray if cuda else cp.asnumpy
-        xp = cp if cuda else np
-        
-        # Get dtype
-        dtype = xp.result_type(*args, *kwargs.values())
+            # Adds main parameters to kwargs
+            if self.main : kwargs = {**instance.parameters, **kwargs}
 
-        # Separate inputs
-        bound = self.signature.bind(*args, **kwargs)
-        bound.apply_defaults()
-        variables = [asarray(bound.arguments[key]).astype(dtype) for key in self.variables]
-        data = [asarray(bound.arguments[key]).astype(dtype) for key in self.data]
-        parameters = [asarray(bound.arguments[key]).astype(dtype) for key in self.parameters]
-    
-        # Get shapes
-        variable_shapes = {arr.shape for arr in variables if arr.size != 1}
-        data_shapes = {arr.shape for arr in data if arr.size != 1}
-        parameters_shapes = {arr.shape for arr in parameters if arr.size != 1}
-        if len(variable_shapes) > 1:
-            raise ValueError(f"Inconsistent variable shapes: {variable_shapes}")
-        if len(data_shapes) > 1:
-            raise ValueError(f"Inconsistent data shapes: {data_shapes}")
-        if len(parameters_shapes) > 1:
-            raise ValueError(f"Inconsistent parameters shapes: {parameters_shapes}")
-        data_shape = next(iter(data_shapes), (1, 1))
-        variable_shape = next(iter(variable_shapes), data_shape[1:])
-        parameters_shape = next(iter(parameters_shapes), (data_shape[0],) )
-    
-        # Get npoints and nmodels
-        nmodels = parameters_shape[0]
-        npoints = np.prod(variable_shape)
-        if data_shape[0] != 1 and (data_shape[0],) != parameters_shape :
-            raise ValueError(f"Inconsistent data / parameters shape compatibility: {data_shapes} / {parameters_shape}")
-        if np.prod(data_shape[1:]) != 1 and data_shape[1:] != variable_shape :
-            raise ValueError(f"Inconsistent data / variables shape compatibility: {data_shapes} / {variable_shape}")
-        data_shape = parameters_shape + variable_shape
+            # Use inputs
+            inputs = use_inputs(self, args, kwargs) # variables, data, parameters
 
-        # Arrays
-        variables = [xp.ascontiguousarray(arr.reshape(npoints)) if arr.size > 1 else xp.full(npoints, arr) for arr in variables]
-        data = [xp.ascontiguousarray(arr.reshape((nmodels, npoints))) if arr.size > 1 else xp.full((nmodels, npoints), arr) for arr in data]
-        parameters = [xp.ascontiguousarray(arr.reshape(nmodels)) if arr.size > 1 else xp.full(nmodels, arr) for arr in parameters]
-        out = xp.empty(shape=(nmodels, npoints), dtype=dtype) # output shape
+            # Get shapes
+            out_shape, in_shapes = use_shapes(*inputs) # (nmodels, npoints), (variables_shapes, data_shapes, parameters_shapes)
 
-        # GPU specifications
-        threads_per_block = 16, 16
-        blocks_per_grid = (nmodels + threads_per_block[0] - 1) // threads_per_block[0], (npoints + threads_per_block[1] - 1) // threads_per_block[1]
+            # Define cuda
+            cuda, xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(instance, out_shape, inputs)
 
-        return variables, data, parameters, out, data_shape, was_on_gpu, (blocks_per_grid, threads_per_block)
+            # Broadcasting
+            variables, data, parameters, dtype = use_broadcasting(xp, *inputs, *in_shapes, out_shape)
+
+            # Output
+            out = xp.empty(shape=out_shape, dtype=dtype)
+
+            # Function jitted
+            jitted = getattr(instance, f'gpu_{name}')[blocks_per_grid, threads_per_block] if cuda else getattr(instance, f'cpu_{name}')
+            
+            # Apply function
+            jitted(*variables, *data, *parameters, out)
+
+            # Modify output
+            out = out.reshape(in_shapes[1])
+            if transfer_back : out = xp.asnumpy(out)
+            return out
+
+        setattr(cls, f'_{name}', func)
 
 
 
-    # Call
-    def __get__(self, instance, owner):
-        '''function called'''
-        if instance :
-            if instance.cuda :
-                return getattr(instance, f'gpu_{self.name}')
-            return getattr(instance, f'cpu_{self.name}')
-        return self
+        # Main wrapper
+
+        if not self.main : return # Stop if not a main function
+        cls.variables, cls.data, cls.parameters = self.variables, self.data, self.parameters
+        for pname, param in self.signature.parameters.items():
+            if pname not in cls.parameters : continue
+
+            #Single property
+            @property
+            def prop(self, pname=pname) :
+                _param = getattr(self, f'_{pname}', None)
+                if _param is not None :
+                    return _param
+                return getattr(self, f'_{pname}0')
+            @prop.setter
+            def prop(self, value, pname=pname) :
+                if value is None :
+                    setattr(self, f'_{pname}', None)
+                else :
+                    try :
+                        value.astype(np.float32)
+                    except AttributeError:
+                        value = np.float32(value)
+                    setattr(self, f'_{pname}', value)
+            setattr(cls, pname, prop)
+
+            #Default value
+            if param.default is not inspect._empty :
+                setattr(cls, f'_{pname}0', np.float32(param.default))
+            else :
+                raise SyntaxError(f'{pname} parameter should have a default value')
+
+            #Estimate parameters function
+            estimate = param.annotation
+            if estimate is inspect._empty :
+                setattr(cls, f'{pname}0', None)
+                setattr(cls, f'{pname}_min', -np.float32(np.inf))
+                setattr(cls, f'{pname}_max', +np.float32(np.inf))
+                setattr(cls, f'{pname}_fit', False)
+            else :
+                setattr(cls, f'{pname}0', staticmethod(estimate))
+                setattr(cls, f'{pname}_fit', True)
+                minmax = estimate.__annotations__.get('return', None)
+                mini, maxi = (None, None) if minmax is None else minmax
+                if mini is None : mini = -np.float32(np.inf)
+                if maxi is None : maxi = +np.float32(np.inf)
+                setattr(cls, f'{pname}_min', mini)
+                setattr(cls, f'{pname}_max', maxi)
+
+
+
 
 
 # %% Test function run

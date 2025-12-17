@@ -4,5 +4,29 @@
         "description": "Decorator class defining universal function factory object from python kernel function, will create kernels, vectorized functions, jitted functions, stack functions, all on CPU / Parallel CPU / GPU.",
         "module": "modules/ufunc_LP/ufunc",
         "object": "ufunc"
+    },
+    "use_broadcasting": {
+        "date": "2025-12-17",
+        "description": "Defines inputs after broadcasting ready to use.",
+        "module": "modules/use_broadcasting_LP/use_broadcasting",
+        "object": "use_broadcasting"
+    },
+    "use_cuda": {
+        "date": "2025-12-17",
+        "description": "Defines cuda parameters.",
+        "module": "modules/use_cuda_LP/use_cuda",
+        "object": "use_cuda"
+    },
+    "use_inputs": {
+        "date": "2025-12-16",
+        "description": "This function takes called inputs and translate them into usable objects.",
+        "module": "modules/use_inputs_LP/use_inputs",
+        "object": "use_inputs"
+    },
+    "use_shapes": {
+        "date": "2025-12-17",
+        "description": "Defines data shape (nmodels, npoints) from inputs.",
+        "module": "modules/use_shapes_LP/use_shapes",
+        "object": "use_shapes"
     }
 }

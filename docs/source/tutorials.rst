@@ -5,7 +5,7 @@
 Tutorials
 =========
 
-In this section, we will showcase different in-depth example using **funcLP** for some typical usage.
+In this section, we will showcase different in-depth example using **template_name** for some typical usage.
 
 For me, there is no better way to learn a library than through manipulating some problems yourself.
 That is why I propose a series of exercices to try out yourself as tutorials.

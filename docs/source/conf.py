@@ -8,8 +8,8 @@ import toml
 sys.path.insert(0, os.path.abspath('../../src'))
 
 # Project informations
-project = 'funcLP'
-copyright = '2025, Lancelot PINCET'
+project = 'template_name'
+copyright = 'template_year, Lancelot PINCET'
 author = 'Lancelot PINCET'
 with open('../../pyproject.toml') as file :
     data = toml.load(file)
