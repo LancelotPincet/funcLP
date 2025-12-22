@@ -29,22 +29,21 @@ class LM(Fit) :
     def fit(self) :
 
         # Allocating data in memory
-        mode_data = None
-        old_chi2, new_chi2, deviance = None, None, None
+        self.mode_data = None
+        self.old_chi2, self.new_chi2, self.deviance = None, None, None
 
         # Iterations
         for _ in range(self.max_iterations) :
 
             #Estimate old chi2
-            model_data = self.function(*self.variables, *self.data, **self.parameters, out=model_data, ignore=self.converged)
-            model_function(*variables.values(), *parameters.values(), model, converged)
-            deviance_function(data, model, weights, deviance, converged)
-            chi2_function(deviance, old_chi2, converged)
+            self.model_data = self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.converged)
+            self.old_chi2 = self.chi2(self.old_chi2)
+            
 
 
 
-    def chi2(self, out=None) : #ICI
-        self.deviance = self.estimator.deviance(raw_data, model_data, weights=weights, out=self.deviance)
-        return deviance.sum(axis=1, out=out)
+    def chi2(self, out=None) :
+        self.deviance = self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance)
+        return self.deviance.sum(axis=1, out=out)
 
 

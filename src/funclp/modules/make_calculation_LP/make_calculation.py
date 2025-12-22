@@ -18,7 +18,7 @@ from funclp import use_inputs, use_shapes, use_cuda, use_broadcasting
 
 
 # %% Function
-def make_calculation(function, name, args, kwargs, out) :
+def make_calculation(function, name, args, kwargs, out=None, ignore=False) :
     '''
     Does the calculation for a given ufunc.
     
@@ -34,6 +34,8 @@ def make_calculation(function, name, args, kwargs, out) :
         Keyword arguments to use for calculation.
     out : xp.ndarray
         Output array, if None will initialize it automatically.
+    ignore : xp.ndarray
+        Boolean array defining for which model we ignore calculations.
 
     Returns
     -------
@@ -50,7 +52,6 @@ def make_calculation(function, name, args, kwargs, out) :
         raise SyntaxError(f'ufunc {name} was not recognized')
 
     # Adds main parameters to kwargs
-    ignore = kwargs.pop('ignore', False)
     if hasattr(function, "parameters") :
         function_parameters = {key: value for key, value in function.parameters.items() if key in ufunc.parameters}
         kwargs = {**function_parameters, **kwargs}

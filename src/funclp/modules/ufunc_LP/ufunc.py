@@ -170,8 +170,8 @@ def func({self.inputs}, out, ignore) :
 
         # Universal function
 
-        def func(instance, *args, out=None, **kwargs):
-            return make_calculation(instance, name, args, kwargs, out)[0] # ignore others (index 1)
+        def func(instance, *args, out=None, ignore=False, **kwargs):
+            return make_calculation(instance, name, args, kwargs, out, ignore)[0] # ignore others (index 1)
         setattr(cls, f'_{name}', func)
 
 
