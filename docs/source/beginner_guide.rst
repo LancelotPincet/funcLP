@@ -5,7 +5,7 @@
 Beginner guide
 ==============
 
-New to **template_name**?
+New to **funcLP**?
 Check out the **Beginner Guide** to get up and running.
 
 .. toctree::

@@ -2,5 +2,5 @@ TODO
 
 .. code-block:: python
 
-    import template_lowername
+    import funclp
     # TODO

@@ -5,7 +5,7 @@
 What is this library?
 =====================
 
-In this section, we will describe what is **template_name**.
+In this section, we will describe what is **funcLP**.
 
 1. First, we will explain the :ref:`context <context_and_motivations>` behind the problematics that motivated its development.
 2. Then, we will explore the strategies used in the :ref:`solutions proposed <proposed_solutions>`.
@@ -30,7 +30,7 @@ TODO
 3. MIT License
 --------------
 
-Intellectual property behind this **template_name** is protected via an **MIT license**.
+Intellectual property behind this **funcLP** is protected via an **MIT license**.
 This means everyone can *freely* use it in a personal, academic or commercial manner, if they **keep the copyright name** at the top of the codes.
 
 The library can be redistributed, *with or without modifications*, in open or closed projects. However the **MIT license must be conserved**.

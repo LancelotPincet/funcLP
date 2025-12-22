@@ -5,7 +5,7 @@
 Quick start
 ===========
 
-In this section, we will get a first grasp of **template_name**.
+In this section, we will get a first grasp of **funcLP**.
 
 1. First, we will see the :ref:`basics <basics>` behind the library design.
 2. Then, we will explore a :ref:`simple example <simple_example>` to showcase the syntax.
@@ -21,11 +21,11 @@ For a refresher, see the `Python tutorial <https://docs.python.org/3/tutorial/>`
 
 TODO
 
-To import ``template_name``, just use :
+To import ``funcLP``, just use :
 
 .. code-block:: python
 
-   import template_lowername
+   import funclp
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ TODO
 
 .. code-block:: python
 
-    import template_lowername
+    import funclp
     # TODO
 
 
@@ -54,4 +54,4 @@ If you encounter problems or have questions:
 
 - Read the :doc:`User Guide <user_guide>`
 - Check the :doc:`Reference Guide <reference_guide>`
-- Open an issue on the `GitHub repository <https://github.com/LancelotPincet/template_name>`_
+- Open an issue on the `GitHub repository <https://github.com/LancelotPincet/funcLP>`_

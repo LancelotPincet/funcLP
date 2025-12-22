@@ -5,7 +5,7 @@
 Reference guide
 ===============
 
-Have a doubt on a syntax in **template_name**?
+Have a doubt on a syntax in **funcLP**?
 Consult the **Reference Guide** to have detailed information on how to call the objects.
 
 .. toctree::

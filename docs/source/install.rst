@@ -3,7 +3,7 @@
 Installation
 ============
 
-In this section, we will see how **template_name** can be installed in your Python projects.
+In this section, we will see how **funcLP** can be installed in your Python projects.
 
 1. We will first do a quick :ref:`reminder on CLI basics <cli_reminder>` necessary to install comfortably the library.
 2. Then, we will explain how to :ref:`create a fresh project <create_project>` compatible with it using *uv*.
@@ -135,7 +135,7 @@ Folder management commands
 2. Create project
 -----------------
 
-Here, we want to create a new Python project with a dependency on **template_name**.
+Here, we want to create a new Python project with a dependency on **funcLP**.
 To make this kind of project functional, there are several steps to follow :
 
 - :ref:`initialize the project folder <initialize_project_with_uv>`:
@@ -226,13 +226,13 @@ To initialize a project called `my_project` with *uv*, use command:
 
 This will create a folder with a *pyproject.toml* file, a *README.md* file and a *main.py* file, then change directory inside the project.
 
-Then, we just need to add the dependencies to your project, typically dependency to **template_name**, with the command:
+Then, we just need to add the dependencies to your project, typically dependency to **funcLP**, with the command:
 
 .. code-block:: shell
 
-   uv add template_lowername
+   uv add funclp
 
-You can redo this command for all the dependencies you might need by replacing the "template_name" by the other dependency name (the name ususally used in the command ``pip``).
+You can redo this command for all the dependencies you might need by replacing the "funcLP" by the other dependency name (the name ususally used in the command ``pip``).
 For more informations, go to the `uv project <https://docs.astral.sh/uv/guides/projects/>`_ website.
 
 The project is now initialized!
@@ -320,7 +320,7 @@ In the following tabs are the protocoles for most commonly used editors.
       If you are using *Anaconda*, you probably are coding via *Spyder* and *Jupyter*.
 
       By default, these use the *base* environment of *Anaconda*, so when you launch them the virtual environment we created will not be active.
-      To be able to use another virtual environment, *Spyder* and *Jupyter* connects to specific kernels, respectively *spyder-kernels* and *ipykernel*, which are included in **template_name** library dependencies.
+      To be able to use another virtual environment, *Spyder* and *Jupyter* connects to specific kernels, respectively *spyder-kernels* and *ipykernel*, which are included in **funcLP** library dependencies.
 
       To activate the virtual environment manually inside the GUIs:
 
@@ -338,8 +338,8 @@ In the following tabs are the protocoles for most commonly used editors.
 
       As other editors have not been tested, please refer to dedicated support to run scripts from virtual environments with these.
 
-To finish, some scripts may be provided with the library **template_name** :doc:`(see Reference Guide) <scripts>`.
-To use them, you can just download `scripts source codes <https://github.com/LancelotPincet/template_name/tree/main/src/template_lowername/scripts>`_.
+To finish, some scripts may be provided with the library **funcLP** :doc:`(see Reference Guide) <scripts>`.
+To use them, you can just download `scripts source codes <https://github.com/LancelotPincet/funcLP/tree/main/src/funclp/scripts>`_.
 
 .. _create_project_without_uv:
 
@@ -363,28 +363,28 @@ If you do not like *uv* or are used to other tools, you can explore other possib
    In *Anaconda*, virtual environments are not stored in the project folder, but in the *anaconda3* folder.
    The philosophy is not to have one virtual environment per project, but to have several projects with same non-conflicting dependencies sharing a global virtual environment.
    That is why *Anaconda* does not provide tools to initialize projects.
-   Here we will explain how to setup up virtual environments dependent on **template_name** that you will be able to use on various projects.
+   Here we will explain how to setup up virtual environments dependent on **funcLP** that you will be able to use on various projects.
 
    By default, you will have a *base* virtual environment where all the classical scientific libraries are already installed.
    This is the virtual environment use by default by the tools from Anaconda like *Spyder* or *Jupyter Lab*.
-   However some dependencies for this Python project might not be available in this *base* environment, like **template_name**.
+   However some dependencies for this Python project might not be available in this *base* environment, like **funcLP**.
    You could manually add these but **this is not recommended** as it will pollute your *base* environment for your other projects and might at some point create dependencies conflicts.
 
    Best practice is to create a new virtual environment and work dependencies inside.
    Use these commands in the *Anaconda prompt* to set up a virtual environment :
 
-   - create venv: ``conda create -n venv_template_name python``
-   - activate venv: ``conda activate venv_template_name``
+   - create venv: ``conda create -n venv_funcLP python``
+   - activate venv: ``conda activate venv_funcLP``
    - update pip: ``conda install pip``
    - add *Spyder* and *Jupyter* kernels: ``conda install spyder-kernels ipykernel``
-   - install **template_name**: ``pip install template_lowername``
+   - install **funcLP**: ``pip install funclp``
    - ...for all other dependencies: ``conda install my_dependency_name` or `pip install my_dependency_name``
 
    Now that the venv is ready in your anaconda3 folder, to run a script from a freshly opened terminal:
 
    .. code-block:: bash
 
-      conda activate venv_template_name
+      conda activate venv_funcLP
       python full/path/to/my_script.py
 
    Then you can deactivate the virtual environment if needed with ``conda deactivate``
@@ -401,7 +401,7 @@ If you do not like *uv* or are used to other tools, you can explore other possib
    3. For good practices, you can add *README.md* and *pyproject.toml* files manually
    4. Create a virtual environment inside the project folder from terminal: ``python -m venv .venv``
    5. Activate the virtual environment: ``.\.venv\Scripts\Activate.ps1`` in Windows, ``source .venv/bin/activate`` in Linux/macOS
-   6. Install **template_name** from terminal: ``pip install template_lowername``
+   6. Install **funcLP** from terminal: ``pip install funclp``
    7. Install with pip all the other dependencies by hand: ``pip install mydependency==myversion``
 
    With these, the project folder should be initialized with a virtual environment.
@@ -416,7 +416,7 @@ If you do not like *uv* or are used to other tools, you can explore other possib
 3. Get source code
 ------------------
 
-If ever you want to play with the library source code, to apply your own modifications, or even to contribute, you can access it on the `GitHub page <https://github.com/LancelotPincet/template_name>`_.
+If ever you want to play with the library source code, to apply your own modifications, or even to contribute, you can access it on the `GitHub page <https://github.com/LancelotPincet/funcLP>`_.
 
 You could download the project directly from the website, but this is **not recommended** as you will not be able to follow various versions of the project, and your modifications will be incompatible with these.
 It is recommended to take the habit of using *git*.
@@ -480,11 +480,11 @@ First, you need to configure your *git* global parameters by filling your name a
    git config --global user.name "Your Name"
    git config --global user.email "youremail@example.com"
 
-Now, you can clone in your current directory the `source code folder <https://github.com/LancelotPincet/template_name>`_ with the following command
+Now, you can clone in your current directory the `source code folder <https://github.com/LancelotPincet/funcLP>`_ with the following command
 
 .. code-block:: shell
 
-   git clone https://github.com/LancelotPincet/template_name.git
+   git clone https://github.com/LancelotPincet/funcLP.git
 
 The project source code should then be present in your local folder.
 If you want to contribute, you can do a pull-request in the GitHub repository.
