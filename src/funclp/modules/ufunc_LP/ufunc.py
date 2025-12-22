@@ -13,16 +13,11 @@ Decorator class defining universal function factory object from python kernel fu
 
 
 # %% Libraries
-from corelp import selfkwargs
-from funclp import use_inputs, use_shapes, use_cuda, use_broadcasting
+from funclp import make_calculation
 import inspect
 import numpy as np
 import numba as nb
 from numba import cuda
-try :
-    import cupy as cp
-except ImportError :
-    cp = None
 
 
 
@@ -59,23 +54,40 @@ class ufunc() :
     ...
     '''
 
-    def __init__(self, *, main=False) :
+    def __init__(self, *, main=False, data=[]) :
         self.main = main
+        self.variable2data = data
 
     def __call__(self, function):
         '''Decorator logic'''
         self.function = function
         self.signature = inspect.signature(function)
 
-        # Get variable and parameters of the function 
+        # Checking input definition follows rules 
         parameters = self.signature.parameters
-        self.variables = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY]
-        self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
-        self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.KEYWORD_ONLY]
+        passed_data = False 
+        for key, value in parameters.items() :
+            match value.kind :
+                case inspect.Parameter.POSITIONAL_ONLY :
+                    if key in self.variable2data :
+                        passed_data = True
+                    elif passed_data :
+                        raise SyntaxError('Cannot define variables inputs after data inputs, please put all variables before data')
+                    else :
+                        pass
+                case inspect.Parameter.POSITIONAL_OR_KEYWORD :
+                    continue
+                case inspect.Parameter.KEYWORD_ONLY :
+                    raise SyntaxError('ufunc cannot have keyword only attributes')
+
+        # Get variable and parameters of the function 
+        self.variables = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key not in self.variable2data]
+        self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key in self.variable2data]
+        self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
         self.inputs = ', '.join([key for key in parameters.keys()])
-        self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables])
-        self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data])
-        self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters])
+        self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables]) + ', ' if len(self.variables) > 0 else ''
+        self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data]) + ', ' if len(self.data) > 0 else ''
+        self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters]) + ', ' if len(self.parameters) > 0 else ''
   
         return self
 
@@ -119,11 +131,12 @@ class ufunc() :
             if func is None:
                 string = f'''
 @nb.njit()
-def func({self.inputs}, out) :
+def func({self.inputs}, out, ignore) :
     nmodels, npoints = out.shape
     for model in nb.prange(nmodels) :
+        if ignore[model] : continue
         for point in range(npoints) :
-            out[model, point] = kernel({self.indexes_variables}, {self.indexes_data}, {self.indexes_parameters})
+            out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters})
 '''
                 glob = {'nb': nb, 'kernel': getattr(instance, f'cpukernel_{name}')}
                 loc = {}
@@ -139,11 +152,11 @@ def func({self.inputs}, out) :
             if func is None:
                 string = f'''
 @nb.cuda.jit()
-def func({self.inputs}, out) :
+def func({self.inputs}, out, ignore) :
     nmodels, npoints = out.shape
     model, point = nb.cuda.grid(2)
-    if model < nmodels and point < npoints :
-        out[model, point] = kernel({self.indexes_variables}, {self.indexes_data}, {self.indexes_parameters})
+    if model < nmodels and point < npoints and not ignore[model] :
+        out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters})
 '''
                 glob = {'nb': nb, 'kernel': getattr(instance, f'gpukernel_{name}')}
                 loc = {}
@@ -157,37 +170,8 @@ def func({self.inputs}, out) :
 
         # Universal function
 
-        def func(instance, *args, **kwargs):
-
-            # Adds main parameters to kwargs
-            if self.main : kwargs = {**instance.parameters, **kwargs}
-
-            # Use inputs
-            inputs = use_inputs(self, args, kwargs) # variables, data, parameters
-
-            # Get shapes
-            out_shape, in_shapes = use_shapes(*inputs) # (nmodels, npoints), (variables_shapes, data_shapes, parameters_shapes)
-
-            # Define cuda
-            cuda, xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(instance, out_shape, inputs)
-
-            # Broadcasting
-            variables, data, parameters, dtype = use_broadcasting(xp, *inputs, *in_shapes, out_shape)
-
-            # Output
-            out = xp.empty(shape=out_shape, dtype=dtype)
-
-            # Function jitted
-            jitted = getattr(instance, f'gpu_{name}')[blocks_per_grid, threads_per_block] if cuda else getattr(instance, f'cpu_{name}')
-            
-            # Apply function
-            jitted(*variables, *data, *parameters, out)
-
-            # Modify output
-            out = out.reshape(in_shapes[1])
-            if transfer_back : out = xp.asnumpy(out)
-            return out
-
+        def func(instance, *args, out=None, **kwargs):
+            return make_calculation(instance, name, args, kwargs, out)[0] # ignore others (index 1)
         setattr(cls, f'_{name}', func)
 
 
@@ -195,9 +179,21 @@ def func({self.inputs}, out) :
         # Main wrapper
 
         if not self.main : return # Stop if not a main function
-        cls.variables, cls.data, cls.parameters = self.variables, self.data, self.parameters
+
+        # Inputs
+        cls.variables, cls.data, = self.variables, self.data
+        @property
+        def prop(instance) :
+            return {parameter : getattr(instance, parameter) for parameter in self.parameters}
+        @prop.setter
+        def prop(instance, dic) :
+            for key, value in dic.items() :
+                setattr(instance, key, value)
+        cls.parameters = prop
+
+        # Single parameters
         for pname, param in self.signature.parameters.items():
-            if pname not in cls.parameters : continue
+            if pname not in self.parameters : continue
 
             #Single property
             @property
@@ -212,9 +208,24 @@ def func({self.inputs}, out) :
                     setattr(self, f'_{pname}', None)
                 else :
                     try :
-                        value.astype(np.float32)
+                        dtype = value.dtype
+                        if np.issubdtype(dtype, np.bool_) :
+                            value.astype(np.bool_)
+                        elif np.issubdtype(dtype, np.floating) :
+                            value.astype(np.float32)
+                        elif np.issubdtype(dtype, np.integer) :
+                            value.astype(np.int32)
+                        else :
+                            raise TypeError(f'Parameter cannot have {dtype} dtype')
                     except AttributeError:
-                        value = np.float32(value)
+                        if isinstance(value, bool) or isinstance(value, np.bool_) :
+                            value = np.bool_(value)
+                        elif isinstance(value, float) or isinstance(value, np.floating) :
+                            value = np.float32(value)
+                        elif isinstance(value, int) or isinstance(value, np.integer) :
+                            value = np.int32(value)
+                        else :
+                            raise TypeError(f'Parameter cannot have {type(value)} dtype')
                     setattr(self, f'_{pname}', value)
             setattr(cls, pname, prop)
 

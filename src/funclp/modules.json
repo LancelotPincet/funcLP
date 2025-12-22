@@ -1,4 +1,46 @@
 {
+    "CudaReference": {
+        "date": "2025-12-21",
+        "description": "This class serves as a parent class and gives parameters defining cuda usage.",
+        "module": "modules/CudaReference_LP/CudaReference",
+        "object": "CudaReference"
+    },
+    "Distribution": {
+        "date": "2025-12-19",
+        "description": "Class defining the noise distribution in data.",
+        "module": "modules/Distribution_LP/Distribution",
+        "object": "Distribution"
+    },
+    "Estimator": {
+        "date": "2025-12-19",
+        "description": "Class defining an estimator function for fitting data.",
+        "module": "modules/Estimator_LP/Estimator",
+        "object": "Estimator"
+    },
+    "Fit": {
+        "date": "2025-12-20",
+        "description": "Class defining fitting algorithms.",
+        "module": "modules/Fit_LP/Fit",
+        "object": "Fit"
+    },
+    "Function": {
+        "date": "2025-12-17",
+        "description": "Function class defining a function model.",
+        "module": "modules/Function_LP/Function",
+        "object": "Function"
+    },
+    "make_calculation": {
+        "date": "2025-12-18",
+        "description": "Does the calculation for a given ufunc.",
+        "module": "modules/make_calculation_LP/make_calculation",
+        "object": "make_calculation"
+    },
+    "plot": {
+        "date": "2025-12-18",
+        "description": "Makes a plot of a function object.",
+        "module": "modules/plot_LP/plot",
+        "object": "plot"
+    },
     "ufunc": {
         "date": "2025-12-13",
         "description": "Decorator class defining universal function factory object from python kernel function, will create kernels, vectorized functions, jitted functions, stack functions, all on CPU / Parallel CPU / GPU.",
