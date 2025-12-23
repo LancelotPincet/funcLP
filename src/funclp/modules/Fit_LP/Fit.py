@@ -46,8 +46,8 @@ class Fit(ABC, CudaReference) :
     def name(self) :
         return self.__class__.__name__
     def __init__(self, function, estimator, **kwargs) :
-        self.function = function # Function object
-        self.estimator = estimator # Estimator object
+        self._function = function # Function object
+        self._estimator = estimator # Estimator object
         self.cuda_reference = self.function
         self.estimator.cuda_reference, self.estimator_cuda_rederence = self.function, self.estimator.cuda_reference
         selfkwargs(self, kwargs)
@@ -56,9 +56,21 @@ class Fit(ABC, CudaReference) :
     max_iterations = 200 #Maximum number of iterations
 
     # Parameters
+    @property
+    def function(self) :
+        return self._function
+    @property
+    def estimator(self) :
+        return self._estimator
     @prop(link='function')
     def parameters(self) :
         return 'parameters'
+    @property
+    def parameters2fit(self) :
+        return [key for key in self.parameters if getattr(self.function, f'{key}_fit')]
+    @property
+    def nparameters2fit(self) :
+        return len(self.parameters2fit)
 
 
 
@@ -73,18 +85,18 @@ class Fit(ABC, CudaReference) :
         # Start
         cache_cuda = self.cuda
         inputs = use_inputs(self.function.__class__.function, args, self.function.parameters) # variables, data, parameters
-        (nomodel, nopoint), (nmodels, npoints), in_shapes = use_shapes(*inputs) # (nomodel, nopoint), (nmodels, npoints), (variables_shapes, data_shapes, parameters_shapes)
-        self.cuda, xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(self.function, (nmodels, npoints), inputs)
-        self.variables, self.data, self.parameters, dtype = use_broadcasting(xp, *inputs, *in_shapes, (nmodels, npoints))
-        self.raw_data = xp.asarray(raw_data).reshape((nmodels, npoints))
-        self.weights = xp.asarray(weights)
-        self.converged = xp.zeros(shape=nmodels, dtype=xp.bool_)
+        (nomodel, nopoint), (self.nmodels, self.npoints), in_shapes = use_shapes(*inputs) # (nomodel, nopoint), (nmodels, npoints), (variables_shapes, data_shapes, parameters_shapes)
+        self.cuda, self.xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(self.function, (self.nmodels, self.npoints), inputs)
+        self.variables, self.data, self.parameters, self.dtype = use_broadcasting(self.xp, *inputs, *in_shapes, (self.nmodels, self.npoints))
+        self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints))
+        self.weights = self.xp.asarray(weights)
+        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_)
 
         # Algorithm fit
         self.fit()
 
         # End
-        if transfer_back : self.parameters = {key: xp.asnumpy(value) for key, value in self.parameters.items()}
+        if transfer_back : self.parameters = {key: self.xp.asnumpy(value) for key, value in self.parameters.items()}
         if nomodel : self.parameters = {key: value.item() for key, value in self.parameters.items()}
         self.function.parameters = self.parameters
         self.cuda = cache_cuda
