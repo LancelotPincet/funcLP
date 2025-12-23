@@ -33,10 +33,9 @@ class ufunc() :
     ... 
     >>> class MyClass() :
     ...     @ufunc() # <-- HERE IS THE DECORATOR TO USE ON A SCALAR METHOD
-    ...     def myfunc(x, y, /, constant, *, a, b) :
-    ...         # Positional only : variables of size npoints, all broadcastable together
-    ...         # Positional and keyword : data of same shape as output
-    ...         # Keyword only : parameters of size nmodels, all broadcastable together
+    ...     def myfunc(x, y, constant, /, a, b) :
+    ...         # Positional only : variables of size npoints, all broadcastable together, then all data of same shape as output, all broadcastable together (must be stepcified in data=[])
+    ...         # Positional and keyword : parameters of size nmodels, all broadcastable together
     ...         return a * x + b * y + constant
     ...     cuda = False
     ... 
@@ -49,7 +48,7 @@ class ufunc() :
     >>> b = 0.5 # Example of scalar use
     >>> cpu_out = instance.myfunc(x, y, constant, a=a, b=b)
     >>> instance.cuda = True
-    >>> gpu_out = instance.myfunc(x, y, constant=constant, a=a, b=b)
+    >>> gpu_out = instance.myfunc(x, y, constant, a=a, b=b)
 
     ...
     '''
@@ -85,6 +84,7 @@ class ufunc() :
         self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key in self.variable2data]
         self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
         self.inputs = ', '.join([key for key in parameters.keys()])
+        self.d_inputs = ', '.join([key for key in self.variables] + [key for key in self.data] + ['/'] + [key for key in self.parameters])
         self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables]) + ', ' if len(self.variables) > 0 else ''
         self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data]) + ', ' if len(self.data) > 0 else ''
         self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters]) + ', ' if len(self.parameters) > 0 else ''
@@ -195,17 +195,17 @@ def func({self.inputs}, out, ignore) :
         for pname, param in self.signature.parameters.items():
             if pname not in self.parameters : continue
 
-            #Single property
+            #parameter property
             @property
-            def prop(self, pname=pname) :
-                _param = getattr(self, f'_{pname}', None)
+            def prop(instance, pname=pname) :
+                _param = getattr(instance, f'_{pname}', None)
                 if _param is not None :
                     return _param
-                return getattr(self, f'_{pname}0')
+                return getattr(instance, f'_{pname}0')
             @prop.setter
-            def prop(self, value, pname=pname) :
+            def prop(instance, value, pname=pname) :
                 if value is None :
-                    setattr(self, f'_{pname}', None)
+                    setattr(instance, f'_{pname}', None)
                 else :
                     try :
                         dtype = value.dtype
@@ -226,8 +226,34 @@ def func({self.inputs}, out, ignore) :
                             value = np.int32(value)
                         else :
                             raise TypeError(f'Parameter cannot have {type(value)} dtype')
-                    setattr(self, f'_{pname}', value)
+                    setattr(instance, f'_{pname}', value)
             setattr(cls, pname, prop)
+
+            # derivative property
+            @property
+            def prop(instance, pname=pname) :
+                inputs_plus = self.inputs.replace(pname, f'{pname} + eps')
+                inputs_minus = self.inputs.replace(pname, f'{pname} - eps')
+                string = f'''
+@ufunc(data={self.variable2data})
+def d_param({self.d_inputs}, eps=1e-4) :
+    f_plus, f_minus = kernel({inputs_plus}), kernel({inputs_minus})
+    if np.isfinite(f_plus) and np.isfinite(f_minus):
+        return (f_plus - f_minus) / (2.0 * eps)
+    f_x = kernel({self.inputs})
+    if np.isfinite(f_plus) and np.isfinite(f_x):
+        return (f_plus - f_x) / eps
+    if np.isfinite(f_minus) and np.isfinite(f_x):
+        return (f_x - f_minus) / eps
+    return np.nan
+'''
+                glob = {'ufunc': self.__class__, 'kernel': getattr(instance, f'cpukernel_{name}'), 'np': np}
+                loc = {}
+                exec(string, glob, loc)
+                func = loc['d_param']
+                setattr(cls, f'd_{pname}', func)
+                return func
+            setattr(cls, f'd_{pname}', prop)
 
             #Default value
             if param.default is not inspect._empty :
