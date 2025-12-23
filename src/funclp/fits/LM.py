@@ -28,13 +28,12 @@ class LM(Fit) :
     damping_increase = 7.0 # Factor to apply when damping
     damping_decrease = 0.4 # Factor to apply when damping
     damping_min, damping_max = 1e-6, 1e6 #damping limit values
-    retries_max = 10 # Maximum of retries for a given hessian
+    max_retries = 10 # Maximum of retries for a given hessian
 
     def fit(self) :
 
         # Allocating data
 
-        self.mode_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
         self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype)
 
         self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype)
@@ -45,32 +44,38 @@ class LM(Fit) :
         self.loss_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
 
         self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype)
+        self.hessian_damped = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype)
         self.fisher_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
 
+        self.improved = self.xp.zeros_like(self.converge)
+        
         self.damping_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=self.damping_init)
 
         # Iterations
         for _ in range(self.max_iterations) :
 
             # Calculate current model data and jacobian
-            self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.converged)
-            self.jacobian(self.jacobian_data)
+            self.model()
+            self.jacobian()
 
-            # Evaluate Solving arrays
+            # Evaluate solving arrays
             self.chi2(self.chi2_data)
-            self.gradient(self.gradient_data)
-            self.hessian(self.hessian_data)
+            self.gradient()
+            self.hessian()
             
-            # Solving
+            # Looping on various damping tries
+            self.improved[:] = self.converged
+            for _ in range(self.max_retries) :
 
+                self.improved
 
     # --- Jacobian ---
 
 
 
-    def jacobian(self, out) :
+    def jacobian(self) :
         jacobian_function = self.gpu_jacobian if self.cuda else self.cpu_jacobian
-        jacobian_function(*self.variables, *self.data, *self.parameters.values(), out, self.converged)
+        jacobian_function(*self.variables, *self.data, *self.parameters.values(), self.jacobian_data, self.converged)
 
     @prop(cache=True)
     def cpu_jacobian(self) :
@@ -177,10 +182,10 @@ def func({inputs}, jacobian, ignore) :
 
 
 
-    def gradient(self, out) :
+    def gradient(self) :
         self.estimator.loss(self.raw_data, self.model_data, weights=self.weights, out=self.loss_data, ignore=self.converged)
         loss2gradient = self.gpu_loss2gradient if self.cuda else self.cpu_loss2gradient
-        loss2gradient(self.jacobian_data, self.loss_data, out, self.converged)
+        loss2gradient(self.jacobian_data, self.loss_data, self.gradient_data, self.converged)
 
     @prop(cache=True)
     def cpu_loss2gradient(self) :
@@ -220,10 +225,10 @@ def func({inputs}, jacobian, ignore) :
 
 
 
-    def hessian(self, out) :
+    def hessian(self) :
         self.estimator.fisher(self.raw_data, self.model_data, weights=self.weights, out=self.fisher_data, ignore=self.converged)
         fisher2ghessian = self.gpu_fisher2ghessian if self.cuda else self.cpu_fisher2ghessian
-        fisher2ghessian(self.jacobian_data, self.fisher_data, out, self.converged)
+        fisher2ghessian(self.jacobian_data, self.fisher_data, self.hessian_data, self.converged)
 
     @prop(cache=True)
     def cpu_loss2gradient(self) :
@@ -256,42 +261,6 @@ def func({inputs}, jacobian, ignore) :
                 (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
                 (self.nparameters2fit + threads_per_block[1] - 1) // threads_per_block[1],
                 (self.nparameters2fit + threads_per_block[2] - 1) // threads_per_block[2],
-                )
-        return func[blocks_per_grid, threads_per_block]
-
-
-
-    # --- Damping ---
-
-
-
-    def damping(self, out) :
-        damping_function = self.gpu_damping if self.cuda else self.cpu_damping
-        damping_function(self.damping_data, out, self.converged)
-
-    @prop(cache=True)
-    def cpu_damping(self) :
-        @nb.njit(parallel=True)
-        def func(damping, hessian, converged) :
-            nmodels, nparams, nparamsT = hessian.shape
-            for model in nb.prange(nmodels) :
-                if converged[model] : continue
-                for param in range(nparams) :
-                    hessian[model, param, param] += damping[model]
-        return func
-
-    @prop(cache=True)
-    def gpu_damping(self) :
-        @nb.cuda.jit()
-        def func(damping, hessian, converged) :
-            nmodels, nparams, nparamsT = hessian.shape
-            model, param = cuda.grid(2)
-            if model < nmodels and not converged[model] and param < nparams :
-                hessian[model, param, param] += damping[model]
-        threads_per_block = 16, 8
-        blocks_per_grid = (
-                (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
-                (self.nparameters2fit + threads_per_block[1] - 1) // threads_per_block[1],
                 )
         return func[blocks_per_grid, threads_per_block]
 

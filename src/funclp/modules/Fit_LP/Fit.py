@@ -72,7 +72,9 @@ class Fit(ABC, CudaReference) :
     def nparameters2fit(self) :
         return len(self.parameters2fit)
 
-
+    # Apply model
+    def model(self) :
+        self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.converged)
 
     #ABC
     @abstractmethod
@@ -89,6 +91,7 @@ class Fit(ABC, CudaReference) :
         self.cuda, self.xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(self.function, (self.nmodels, self.npoints), inputs)
         self.variables, self.data, self.parameters, self.dtype = use_broadcasting(self.xp, *inputs, *in_shapes, (self.nmodels, self.npoints))
         self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints))
+        self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
         self.weights = self.xp.asarray(weights)
         self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_)
 
