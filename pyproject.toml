@@ -22,9 +22,3 @@ cuda13 = [ "cupy-cuda13x", "numba-cuda[cu13]",]
 
 [tool.uv]
 required-environments = [ "sys_platform == 'linux' and platform_machine == 'x86_64'", "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",]
-
-[tool.uv.sources.corelp]
-workspace = true
-
-[tool.uv.sources.plotlp]
-workspace = true
