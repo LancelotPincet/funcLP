@@ -1,6 +1,6 @@
 [project]
 name = "funclp"
-version = "0.1.5"
+version = "0.1.6"
 description = "A library for defining mathematical functions and fits."
 readme = "README.md"
 requires-python = ">=3.12"
