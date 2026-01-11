@@ -15,7 +15,7 @@ use_cuda : Defines cuda parameters.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import use_cuda
 debug_folder = debug(__file__)

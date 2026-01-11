@@ -15,7 +15,7 @@ use_broadcasting : Defines inputs after broadcasting ready to use.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import use_broadcasting
 debug_folder = debug(__file__)

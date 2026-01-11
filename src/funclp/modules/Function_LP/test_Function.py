@@ -15,7 +15,7 @@ Function : Function class defining a function model.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import Function
 debug_folder = debug(__file__)

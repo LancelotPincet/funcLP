@@ -15,7 +15,7 @@ ufunc : Decorator class defining universal function factory object from python k
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 from funclp import ufunc
 from time import perf_counter
 import numpy as np

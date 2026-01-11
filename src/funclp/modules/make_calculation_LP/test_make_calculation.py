@@ -15,7 +15,7 @@ make_calculation : Does the calculation for a given ufunc.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import make_calculation
 debug_folder = debug(__file__)

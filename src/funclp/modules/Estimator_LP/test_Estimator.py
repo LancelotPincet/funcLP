@@ -15,7 +15,7 @@ Estimator : Class defining an estimator function for fitting data.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import Estimator
 debug_folder = debug(__file__)

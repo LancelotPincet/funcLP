@@ -15,7 +15,7 @@ CudaReference : This class serves as a parent class and gives parameters definin
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import CudaReference
 debug_folder = debug(__file__)

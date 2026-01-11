@@ -15,7 +15,7 @@ Distribution : Class defining the noise distribution in data.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import Distribution
 debug_folder = debug(__file__)

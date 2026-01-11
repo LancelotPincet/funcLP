@@ -15,7 +15,7 @@ Fit : Class defining fitting algorithms.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import Fit
 debug_folder = debug(__file__)

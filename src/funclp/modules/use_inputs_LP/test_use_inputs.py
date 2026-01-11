@@ -15,7 +15,7 @@ use_inputs : This function takes called inputs and translate them into usable ob
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import use_inputs
 debug_folder = debug(__file__)

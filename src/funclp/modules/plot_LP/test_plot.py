@@ -15,7 +15,7 @@ plot : Makes a plot of a function object.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import plot
 debug_folder = debug(__file__)

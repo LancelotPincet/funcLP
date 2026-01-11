@@ -15,7 +15,7 @@ use_shapes : Defines data shape (nmodels, npoints) from inputs.
 
 
 # %% Libraries
-from corelp import print, debug
+from corelp import debug
 import pytest
 from funclp import use_shapes
 debug_folder = debug(__file__)
