@@ -16,9 +16,9 @@ docs = [ "sphinx", "sphinx-design", "sphinx-rtd-theme", "toml",]
 anaconda = [ "ipykernel", "spyder-kernels",]
 
 [project.optional-dependencies]
-cuda11 = [ "cupy-cuda11x", "numba-cuda[cu11]",]
-cuda12 = [ "cupy-cuda12x", "numba-cuda[cu12]",]
-cuda13 = [ "cupy-cuda13x", "numba-cuda[cu13]",]
+cuda11 = [ "cupy-cuda11x", "numba-cuda",]
+cuda12 = [ "cupy-cuda12x", "numba-cuda",]
+cuda13 = [ "cupy-cuda13x", "numba-cuda",]
 
 [tool.uv]
 required-environments = [ "sys_platform == 'linux' and platform_machine == 'x86_64'", "sys_platform == 'win32' and (platform_machine == 'AMD64' or platform_machine == 'x86_64')",]
