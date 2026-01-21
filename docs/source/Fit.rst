@@ -1,5 +1,5 @@
 funclp.Fit module
-=================
+template[libequals]===========
 
 .. autoclass:: funclp.Fit
    :members: 

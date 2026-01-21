@@ -1,5 +1,5 @@
 funclp.Function module
-======================
+template[libequals]================
 
 .. autoclass:: funclp.Function
    :members: 
