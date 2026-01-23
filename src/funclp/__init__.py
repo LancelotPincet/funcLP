@@ -34,6 +34,8 @@ from contextlib import contextmanager
 def resources_dir():
     with resources.as_file(resources.files("funclp.resources")) as path:
         yield path
+if False: 
+    import funclp.resources
 
 # %% Hidden imports
 if False :
