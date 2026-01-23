@@ -27,31 +27,6 @@ sources = {
 'use_shapes': 'funclp.modules.use_shapes_LP.use_shapes'
 }
 
-from importlib import resources
-from contextlib import contextmanager
-
-@contextmanager
-def resources_dir():
-    with resources.as_file(resources.files("funclp.resources")) as path:
-        yield path
-if False: 
-    import funclp.resources
-
-# %% Hidden imports
-if False :
-    import funclp.modules.CudaReference_LP.CudaReference
-    import funclp.modules.Distribution_LP.Distribution
-    import funclp.modules.Estimator_LP.Estimator
-    import funclp.modules.Fit_LP.Fit
-    import funclp.modules.Function_LP.Function
-    import funclp.modules.make_calculation_LP.make_calculation
-    import funclp.modules.plot_LP.plot
-    import funclp.modules.ufunc_LP.ufunc
-    import funclp.modules.use_broadcasting_LP.use_broadcasting
-    import funclp.modules.use_cuda_LP.use_cuda
-    import funclp.modules.use_inputs_LP.use_inputs
-    import funclp.modules.use_shapes_LP.use_shapes
-
 
 
 # %% Lazy imports
