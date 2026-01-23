@@ -27,7 +27,13 @@ sources = {
 'use_shapes': 'funclp.modules.use_shapes_LP.use_shapes'
 }
 
+from importlib import resources
+from contextlib import contextmanager
 
+@contextmanager
+def resources_dir():
+    with resources.as_file(resources.files("funclp.resources")) as path:
+        yield path
 
 # %% Hidden imports
 if False :
