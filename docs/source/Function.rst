@@ -1,7 +1,7 @@
-funclp.Function module
-template[libequals]================
+template_lowername.Function module
+template_equals================
 
-.. autoclass:: funclp.Function
+.. autoclass:: template_lowername.Function
    :members: 
    :show-inheritance:
    :undoc-members:

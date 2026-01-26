@@ -1,7 +1,7 @@
-funclp.Estimator module
-template[libequals]=================
+template_lowername.Estimator module
+template_equals=================
 
-.. autoclass:: funclp.Estimator
+.. autoclass:: template_lowername.Estimator
    :members: 
    :show-inheritance:
    :undoc-members:

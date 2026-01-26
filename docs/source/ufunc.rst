@@ -1,4 +1,4 @@
-funclp.ufunc module
-===================
+template_lowername.ufunc module
+template_equals=============
 
-.. autofunction:: funclp.ufunc
+.. autofunction:: template_lowername.ufunc

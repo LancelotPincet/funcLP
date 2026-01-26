@@ -1,4 +1,4 @@
-funclp.use_cuda module
-======================
+template_lowername.use_cuda module
+template_equals================
 
-.. autofunction:: funclp.use_cuda
+.. autofunction:: template_lowername.use_cuda

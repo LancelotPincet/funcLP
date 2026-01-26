@@ -1,4 +1,4 @@
-funclp.make_calculation module
-==============================
+template_lowername.make_calculation module
+template_equals========================
 
-.. autofunction:: funclp.make_calculation
+.. autofunction:: template_lowername.make_calculation
