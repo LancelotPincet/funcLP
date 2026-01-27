@@ -16,10 +16,14 @@ Here are the references to the various modules to import in **funcLP**.
    use_cuda
    Distribution
    use_inputs
+   functions
    Fit
    Estimator
    use_broadcasting
+   distributions
    use_shapes
    plot
    make_calculation
+   estimators
    Function
+   fits

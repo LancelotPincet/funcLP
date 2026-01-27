@@ -15,7 +15,7 @@ import math
 
 # %% Function
 
-class GaussianDistribution(Distribution) :
+class Normal(Distribution) :
 
     @ufunc(main=True, data=['raw_data', 'model_data'])
     def pdf(self, raw_data, model_data, /, sigma=np.float32(1), weights=np.float32(1.)):

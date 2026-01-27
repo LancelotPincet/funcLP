@@ -15,7 +15,7 @@ import math
 
 # %% Function
 
-class GammaDistribution(Distribution) :
+class Gamma(Distribution) :
 
     @ufunc(main=True, data=['raw_data', 'model_data'])
     def pdf(self, raw_data, model_data, /, k=np.float32(1.), eps=np.float32(1e-6), weights=np.float32(1.)):
