@@ -16,10 +16,7 @@ Makes a plot of a function object.
 from funclp import make_calculation
 from plotlp import figure
 import numpy as np
-try :
-    import cupy as cp
-except ImportError :
-    cp = None
+
 
 
 # %% Function

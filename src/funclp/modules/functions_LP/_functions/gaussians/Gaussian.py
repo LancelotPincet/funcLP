@@ -37,7 +37,7 @@ class Gaussian(Function):
     def function(x, /, mu:mu=0, sig:sig=1/np.sqrt(2*np.pi), amp:amp=1, offset:offset=0, pix=-1, nsig=-1) :
         return gausfunc(x, mu, sig, amp, offset, pix, nsig)
     
-    
+
 
     # Parameters derivatives
     @ufunc()
