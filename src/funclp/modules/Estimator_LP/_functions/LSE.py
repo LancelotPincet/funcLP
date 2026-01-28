@@ -9,7 +9,7 @@
 
 # %% Libraries
 from .MLE import MLE
-from funclp import GaussianDistribution
+from funclp import Normal
 
 
 
@@ -20,4 +20,4 @@ class LSE(MLE) :
     def __init__(self, distribution=None, **kwargs) :
         if distribution is not None :
             raise SyntaxError('LSE cannot have a distribution')
-        super().__init__(GaussianDistribution(), **kwargs)
+        super().__init__(Normal(), **kwargs)

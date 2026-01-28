@@ -18,12 +18,8 @@ Here are the references to the various modules to import in **funcLP**.
    use_shapes
    Fit
    use_inputs
-   functions
-   distributions
    plot
    ufunc
    make_calculation
    Distribution
-   estimators
    Estimator
-   fits
