@@ -29,7 +29,7 @@ class LM(Fit) :
         self.damping_cache = self.xp.empty_like(self.damping_data)
         self.hessian_diag = self.xp.empty(shape=(self.nmodels, self.nparameters2fit), dtype=self.dtype)
         
-    def fit_optimize(self)
+    def fit_optimize(self) :
 
         # Reset cache
         self.damping_cache[:] = self.damping_data
@@ -42,7 +42,7 @@ class LM(Fit) :
             self.damping()
 
             # Solve function
-            self.parameter_steps = self.xp.linalg.solve(self.hessian_data, -self.gradient_data) # TODO
+            self.solve()
 
             # Apply steps
             self.parameter_change()
@@ -55,17 +55,13 @@ class LM(Fit) :
             if self.improved.all() :
                 break
 
-        # Update damping
-        self.update_damping()
-
-
 
 
     # --- Hessian diagonal ---
 
     def hessian_Hdiag(self) :
         Hdiag_function = self.gpu_Hdiag if self.cuda else self.cpu_Hdiag
-        Hdiag_function(self.hessian, self.hessian_diag, self.converged)
+        Hdiag_function(self.hessian_data, self.hessian_diag, self.converged)
 
     @prop(cache=True)
     def cpu_Hdiag(self) :
@@ -99,7 +95,7 @@ class LM(Fit) :
 
     def damping(self) :
         damping_function = self.gpu_damping if self.cuda else self.cpu_damping
-        damping_function(self.hessian, self.hessian_diag, self.damping_data, self.improved)
+        damping_function(self.hessian_data, self.hessian_diag, self.damping_data, self.improved)
 
     @prop(cache=True)
     def cpu_damping(self) :
@@ -125,6 +121,70 @@ class LM(Fit) :
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
             (self.nparameters2fit + threads_per_block[1] - 1) // threads_per_block[1],
             )
+        return func[blocks_per_grid, threads_per_block]
+
+
+
+    # --- Cholesky Solve ---
+
+    def solve(self) :
+        solve_function = self.gpu_solve if self.cuda else self.cpu_solve
+        convergence_function(self.hessian_data, self.gradient_data, self.parameter_steps, self.improved)
+
+    @prop(cache=True)
+    def cpu_solve(self) :
+        @nb.njit(parallel=True)
+        def func(hessian, gradient, steps, ignore) :
+            nmodels, nparams, _ = hessian.shape
+            for model in prange(nmodels):
+                if ignore[model]: continue
+                
+                # --- Cholesky factorization: H = L Lᵀ (in place) ---
+                for param in range(nparams):
+                    for j in range(param + 1):
+                        s = hessian[model, param, j]
+                        for k in range(j):
+                            s -= hessian[model, param, k] * hessian[model, j, k]
+
+                        if i == j:
+                            if s <= 0.0:
+                                ignore[model] = True
+                                break
+                            hessian[model, i, j] = np.sqrt(s)
+                        else:
+                            hessian[model, i, j] = s / hessian[model, j, j]
+
+                    if ignore[model]:
+                        break
+
+                if ignore[model]:
+                    continue
+
+                # --- Forward substitution: L y = -g ---
+                for i in range(nparams):
+                    s = -gradient[m, i, 0]
+                    for k in range(i):
+                        s -= hessian[m, i, k] * steps[m, k, 0]
+                    steps[m, i, 0] = s / hessian[m, i, i]
+
+                # --- Back substitution: Lᵀ x = y ---
+                for i in range(nparams - 1, -1, -1):
+                    s = steps[m, i, 0]
+                    for k in range(i + 1, nparams):
+                        s -= hessian[m, k, i] * steps[m, k, 0]
+                    steps[m, i, 0] = s / hessian[m, i, i]
+            
+        return func
+
+    @prop(cache=True)
+    def cpu_sgpu_solveolve(self) :
+        @nb.cuda.jit()
+        def func(ftol, old_chi2, new_chi2, gtol, gradient, xtol, parameter_steps, improved, ignore) :
+            model = nb.cuda.grid(1)  # 1D grid of threads
+            nmodels, nparams, _ = gradient.shape
+
+        threads_per_block = 128
+        blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
         return func[blocks_per_grid, threads_per_block]
 
 
@@ -177,76 +237,54 @@ class LM(Fit) :
 
     def improving(self) :
         improving_function = self.gpu_improve if self.cuda else self.cpu_improve
-        improving_function(self.chi2_cache, self.chi2_data, self.parameters, self.parameter_steps, self.damping_data, self.damping_increase, self.damping_max, self.self.improved)
+        improving_function(self.chi2_cache, self.chi2_data, self.parameters, self.parameter_steps, self.damping_data, self.damping_increase, self.damping_decrease, self.damping_max, self.damping_min, self.converged, self.improved)
 
     @prop(cache=True)
     def cpu_improve(self) :
         @nb.njit(parallel=True)
-        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_max, ignore) :
+        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, ignore) :
             nmodels, nparams = parameters.shape
             for model in nb.prange(nmodels) :
                 if ignore[model] : continue
-                if old_chi2 < new_chi2 : #Better
+                if old_chi2 > new_chi2 : #Better
                     ignore[model] = True
+                    damping[model] *= damping_decrease
+                    if damping[model] < damping_min :
+                        damping[model] = damping_min
                 else : #Worse
                     for param in range(nparams) :
-                        parameters[model, param] -= parameter_steps[model, param, 0] # Come back to before
-                    damping[model] *= damping_increase
-                    if damping[model] > damping_max :
-                        damping[model] = damping_max
+                        parameters[model, param] -= parameter_steps[model, param, 0]
+                    if damping[model] == damping_max:
+                        converged[model] = -1
+                        ignore[model] = True
+                    else :
+                        damping[model] *= damping_increase
+                        if damping[model] > damping_max :
+                            damping[model] = damping_max
         return func
 
     @prop(cache=True)
     def gpu_improve(self) :
         @nb.cuda.jit()
-        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_max, ignore) :
+        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, ignore) :
             nmodels, nparams = parameters.shape
             model = nb.cuda.grid(1)
             if model < nmodels and not ignore[model] :
-                if old_chi2 < new_chi2 : #Better
+                if old_chi2 > new_chi2 : #Better
                     ignore[model] = True
-                else : #Worse
-                    for param in range(nparams) :
-                        parameters[model, param] -= parameter_steps[model, param, 0] # Come back to before
-                    damping[model] *= damping_increase
-                    if damping[model] > damping_max :
-                        damping[model] = damping_max
-        threads_per_block = 128
-        blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
-        return func[blocks_per_grid, threads_per_block]
-
-
-
-    # --- Update damping ---
-
-    def update_damping(self) :
-        updatedamp_function = self.gpu_updatedamp if self.cuda else self.cpu_updatedamp
-        updatedamp_function(self.damping, self.damping_cache, self.damping_decrease, self.damping_increase, self.damping_min, self.damping_max, self.self.improved, self.converged)
-
-    @prop(cache=True)
-    def cpu_updatedamp(self) :
-        @nb.njit(parallel=True)
-        def func(damping, damping_cache, damping_decrease, damping_increase, damping_min, damping_max, improved, ignore) :
-            nmodels, = improved.shape
-            for model in nb.prange(nmodels) :
-                if ignore[model] : continue
-                if improved[model] :
                     damping[model] *= damping_decrease
                     if damping[model] < damping_min :
                         damping[model] = damping_min
-                else :
-                    damping[model] *= damping_increase
-                    if damping[model] > damping_max :
-                        damping[model] = damping_max
-
-
-        return func
-
-    @prop(cache=True)
-    def gpu_updatedamp(self) :
-        @nb.cuda.jit()
-        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_max, ignore) :
-
+                else : #Worse
+                    for param in range(nparams) :
+                        parameters[model, param] -= parameter_steps[model, param, 0]
+                    if damping[model] == damping_max:
+                        converged[model] = -1
+                        ignore[model] = True
+                    else :
+                        damping[model] *= damping_increase
+                        if damping[model] > damping_max :
+                            damping[model] = damping_max
         threads_per_block = 128
         blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
         return func[blocks_per_grid, threads_per_block]
