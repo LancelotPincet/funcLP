@@ -78,12 +78,6 @@ class Fit(ABC, CudaReference) :
 
 
 
-    # Apply model
-    def model(self) :
-        self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.converged)
-
-
-
     #ABC
     @abstractmethod
     def fit_init(self) :
@@ -108,7 +102,8 @@ class Fit(ABC, CudaReference) :
         self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
         self.weights = self.xp.asarray(weights)
         self.parameter_steps = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype)
-        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_)
+        self.improved = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_)
+        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.uint8)
         self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype)
         self.deviance_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
         self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype)
@@ -118,13 +113,16 @@ class Fit(ABC, CudaReference) :
         self.fisher_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
         self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype)
 
-        # Initialize cached chi2
-        self.model()
+        # Initialize
         self.chi2()
-        self.chi2_cache[:] = self.chi2_data
+        self.fit_init()
 
         # Iterations
         for _ in range(self.max_iterations) :
+
+            # Reset caches
+            self.chi2_cache[:] = self.chi2_data
+            self.xp.greater(self.converged, 0, out=self.improved)
 
             # Evaluate local model
             self.jacobian()
@@ -140,7 +138,9 @@ class Fit(ABC, CudaReference) :
                 break
 
         # End
-        if transfer_back : self.parameters = [self.xp.asnumpy(param) for param in self.parameters]
+        if transfer_back :
+            self.parameters = [self.xp.asnumpy(param) for param in self.parameters]
+            self.converged = self.xp.asnumpy(self.converged)
         if nomodel : self.parameters = [param.item() for param in self.parameters]
         self.cuda = cache_cuda
         self.function.parameters = {key: self.parameters[pos] if getattr(self.function, f'{key}_fit') else self.function.parameters[key] for pos, key in enumerate(self.function.parameters.keys())}
@@ -151,6 +151,7 @@ class Fit(ABC, CudaReference) :
     # --- Chi² ---
 
     def chi2(self) :
+        self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.converged)
         self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.converged)
         deviance2chi2_function = self.gpu_deviance2chi2 if self.cuda else self.cpu_deviance2chi2
         deviance2chi2_function(self.deviance_data, self.chi2_data, self.converged)
@@ -341,18 +342,18 @@ class Fit(ABC, CudaReference) :
 
     def convergence(self) :
         convergence_function = self.gpu_convergence if self.cuda else self.cpu_convergence
-        convergence_function(self.ftol, self.chi2_cache, self.chi2_data, self.gtol, self.gradient, self.xtol, self.delta, self.converged)
+        convergence_function(self.ftol, self.chi2_cache, self.chi2_data, self.gtol, self.gradient, self.xtol, self.parameter_steps, self.improved, self.converged)
 
     @prop(cache=True)
     def cpu_convergence(self) :
         @nb.njit(parallel=True)
-        def func(ftol, old_chi2, new_chi2, gtol, gradient, xtol, delta, ignore) :
+        def func(ftol, old_chi2, new_chi2, gtol, gradient, xtol, parameter_steps, improved, ignore) :
             nmodels, nparams, _ = gradient.shape
             for model in nb.prange(nmodels) :
-                if ignore[model] : continue
+                if ignore[model] or not improved[model] : continue
                 # ftol
                 if np.abs(new_chi2[model] - old_chi2[model]) <= ftol :
-                    ignore[model] = True
+                    ignore[model] = 1
                     continue
                 # gtol
                 maxi = 0.0
@@ -360,27 +361,27 @@ class Fit(ABC, CudaReference) :
                     g = abs(gradient[model, param, 0])
                     if maxi < g : maxi = g
                 if maxi <= gtol :
-                    ignore[model] = True
+                    ignore[model] = 2
                     continue
                 # xtol
                 sum = 0.0
                 for param in range(nparams) :
-                    sum += delta[model, param, 0]**2
+                    sum += parameter_steps[model, param, 0]**2
                 if sum <= xtol :
-                    ignore[model] = True
+                    ignore[model] = 3
                     continue
         return func
 
     @prop(cache=True)
     def gpu_convergence(self) :
         @nb.cuda.jit()
-        def func(ftol, old_chi2, new_chi2, gtol, gradient, xtol, delta, ignore) :
+        def func(ftol, old_chi2, new_chi2, gtol, gradient, xtol, parameter_steps, improved, ignore) :
             model = nb.cuda.grid(1)  # 1D grid of threads
             nmodels, nparams, _ = gradient.shape
-            if model < nmodels and not ignore[model] :
+            if model < nmodels and not ignore[model] and improved[model]:
                 # ftol
                 if np.abs(new_chi2[model] - old_chi2[model]) <= ftol :
-                    ignore[model] = True
+                    ignore[model] = 1
                     return
                 # gtol
                 maxi = 0.0
@@ -388,14 +389,14 @@ class Fit(ABC, CudaReference) :
                     g = abs(gradient[model, param, 0])
                     if maxi < g : maxi = g
                 if maxi <= gtol :
-                    ignore[model] = True
+                    ignore[model] = 2
                     return
                 # xtol
                 sum = 0.0
                 for param in range(nparams) :
-                    sum += delta[model, param, 0]**2
+                    sum += parameter_steps[model, param, 0]**2
                 if sum <= xtol :
-                    ignore[model] = True
+                    ignore[model] = 3
                     return
         threads_per_block = 128
         blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
