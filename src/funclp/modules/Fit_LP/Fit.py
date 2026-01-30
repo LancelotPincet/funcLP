@@ -98,20 +98,21 @@ class Fit(ABC, CudaReference) :
         self.variables, self.data, self.parameters, self.dtype = use_broadcasting(self.xp, *inputs, *in_shapes, (self.nmodels, self.npoints))
 
         # Allocate memory
-        self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints))
-        self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
-        self.weights = self.xp.asarray(weights)
-        self.parameter_steps = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype)
-        self.improved = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_)
-        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.uint8) # -1: failed, 0: not converged yet, 1: ftol, 2: xtol, 
-        self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype)
-        self.deviance_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
-        self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype)
-        self.chi2_cache = self.xp.empty_like(self.chi2_data)
-        self.loss_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
-        self.gradient_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype)
-        self.fisher_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype)
-        self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype)
+        self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints)) # Data to fit
+        self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Calculated data from current model
+        self.weights = self.xp.asarray(weights) # weights vector
+        self.parameter_steps = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype) # Step to apply on each parameter
+        self.improved = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer loop improved --> Stop inner loop
+        self.failed = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer failed --> continue to next inner loop
+        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.uint8) # Int vector: -1: failed global convergence, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
+        self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype) # Jacobian matrix
+        self.deviance_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Deviance matrix to calculate chi2
+        self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype) # chi2 current vector
+        self.chi2_cache = self.xp.empty_like(self.chi2_data) # chi2 reference vector to define improvement
+        self.loss_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Loss matrix to calculate gradient
+        self.gradient_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype) # gradient matrix
+        self.fisher_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # fisher matrix to calculate hessian
+        self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype) # hessian matrix
 
         # Initialize
         self.chi2()
@@ -173,15 +174,26 @@ class Fit(ABC, CudaReference) :
     def gpu_deviance2chi2(self) :
         @nb.cuda.jit()
         def func(deviance, chi2, ignore) :
-            nmodels, npoints = deviance.shape
-            model = nb.cuda.grid(1)  # 1D grid of threads
-            if model < nmodels and not ignore[model] :
-                s = 0.0
-                for point in range(npoints):
-                    s += deviance[model, point]
-                chi2[model] = s
-        threads_per_block = 128
-        blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
+            model = cuda.blockIdx.x
+            tid = cuda.threadIdx.x
+            npoints = deviance.shape[1]
+            smem = cuda.shared.array(256, dtype=nb.float32)
+            s = 0.0
+            for i in range(tid, npoints, cuda.blockDim.x):
+                s += deviance[model, i]
+            smem[tid] = s
+            cuda.syncthreads()
+            # reduction
+            stride = cuda.blockDim.x // 2
+            while stride > 0:
+                if tid < stride:
+                    smem[tid] += smem[tid + stride]
+                cuda.syncthreads()
+                stride //= 2
+            if tid == 0:
+                chi2[model] = smem[0]
+        threads_per_block = 256
+        blocks_per_grid = self.nmodels
         return func[blocks_per_grid, threads_per_block]
 
 
@@ -222,13 +234,13 @@ class Fit(ABC, CudaReference) :
 
     @prop(cache=True)
     def gpu_jacobian(self) :
-        kernels = {f"d_{parameter}": getattr(self.function, f'cpukernel_d_{parameter}') for parameter in self.parameters2fit}
+        kernels = {f"d_{parameter}": getattr(self.function, f'gpukernel_d_{parameter}') for parameter in self.parameters2fit}
         inputs = ''
         inputs += ', '.join(self.function.variables) + ', ' if len(self.function.variables) > 0 else ''
         inputs += ', '.join(self.function.data) + ', ' if len(self.function.data) > 0 else ''
         inputs += ', '.join(self.parameters.keys())
         string = f'''
-    @nb.cuda.jit(parallel=True)
+    @nb.cuda.jit()
     def func({inputs}, jacobian, ignore) :
     nmodels, npoints, nparams = jacobian.shape
     model, point, param = nb.cuda.grid(3)
