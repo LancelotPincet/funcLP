@@ -50,7 +50,7 @@ class Fit(ABC, CudaReference) :
         self._function = function # Function object
         self._estimator = estimator # Estimator object
         self.cuda_reference = self.function
-        self.estimator.cuda_reference, self.estimator_cuda_rederence = self.function, self.estimator.cuda_reference
+        self.estimator.cuda_reference = self.function
         selfkwargs(self, kwargs)
 
     # Function and estimator
@@ -104,7 +104,7 @@ class Fit(ABC, CudaReference) :
         self.parameter_steps = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, 1), dtype=self.dtype) # Step to apply on each parameter
         self.improved = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer loop improved --> Stop inner loop
         self.failed = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer failed --> continue to next inner loop
-        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.uint8) # Int vector: -1: failed global convergence, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
+        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.int8) # Int vector: -1: failed global convergence, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
         self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype) # Jacobian matrix
         self.deviance_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Deviance matrix to calculate chi2
         self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype) # chi2 current vector
@@ -174,21 +174,23 @@ class Fit(ABC, CudaReference) :
     def gpu_deviance2chi2(self) :
         @nb.cuda.jit()
         def func(deviance, chi2, ignore) :
-            model = cuda.blockIdx.x
-            tid = cuda.threadIdx.x
+            model = nb.cuda.blockIdx.x
+            tid = nb.cuda.threadIdx.x
+            if ignore[model]:
+                return
             npoints = deviance.shape[1]
-            smem = cuda.shared.array(256, dtype=nb.float32)
+            smem = nb.cuda.shared.array(256, dtype=nb.float32)
             s = 0.0
-            for i in range(tid, npoints, cuda.blockDim.x):
+            for i in range(tid, npoints, nb.cuda.blockDim.x):
                 s += deviance[model, i]
             smem[tid] = s
-            cuda.syncthreads()
+            nb.cuda.syncthreads()
             # reduction
-            stride = cuda.blockDim.x // 2
+            stride = nb.cuda.blockDim.x // 2
             while stride > 0:
                 if tid < stride:
                     smem[tid] += smem[tid + stride]
-                cuda.syncthreads()
+                nb.cuda.syncthreads()
                 stride //= 2
             if tid == 0:
                 chi2[model] = smem[0]
@@ -218,12 +220,10 @@ class Fit(ABC, CudaReference) :
     for model in nb.prange(nmodels) :
         if ignore[model] : continue
         for point in range(npoints) :
-            for param in range(nparams) :
     '''
         for param, parameter in enumerate(self.parameters2fit) :
             string += f'''
-                if param == {param} :
-                    jacobian[model, point, param] = d_{parameter}({inputs})
+            jacobian[model, point, {param}] = d_{parameter}({inputs})
     '''
         glob = {'nb': nb}
         glob.update(kernels)
@@ -243,24 +243,22 @@ class Fit(ABC, CudaReference) :
     @nb.cuda.jit()
     def func({inputs}, jacobian, ignore) :
     nmodels, npoints, nparams = jacobian.shape
-    model, point, param = nb.cuda.grid(3)
-    if model < nmodels and not ignore[model] and point < npoints and param < nparams :
+    model, point = nb.cuda.grid(2)
+    if model < nmodels and not ignore[model] and point < npoints :
     '''
         for param, parameter in enumerate(self.parameters2fit) :
             string += f'''
-        if param == {param} :
-            jacobian[model, point, param] = d_{parameter}({inputs})
+        jacobian[model, point, {param}] = d_{parameter}({inputs})
     '''
         glob = {'nb': nb}
         glob.update(kernels)
         loc = {}
         exec(string, glob, loc)
         func = loc['func']
-        threads_per_block = 8, 8, 8
+        threads_per_block = 16, 16
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
             (self.npoints + threads_per_block[1] - 1) // threads_per_block[1],
-            (self.nparameters2fit + threads_per_block[2] - 1) // threads_per_block[2],
             )
         return func[blocks_per_grid, threads_per_block]
 
@@ -291,20 +289,29 @@ class Fit(ABC, CudaReference) :
     def gpu_loss2gradient(self) :
         @nb.cuda.jit()
         def func(jacobian, loss, gradient, ignore) :
-            nmodels, npoints, nparams = jacobian.shape
-            model, param = nb.cuda.grid(2)
-            if model < nmodels and not ignore[model] and param < nparams :
-                s = 0.0
-                for point in range(npoints):
-                    s += jacobian[model, point, param] * loss[model, point]
-                gradient[model, param, 0] = s
-        threads_per_block = 16, 16
-        blocks_per_grid = (
-                (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
-                (self.nparameters2fit + threads_per_block[1] - 1) // threads_per_block[1],
-                )
+            model = nb.cuda.blockIdx.x
+            tid = nb.cuda.threadIdx.x
+            if ignore[model] :
+                return
+            npoints = jacobian.shape[1]
+            nparams  = jacobian.shape[2]
+            g = nb.cuda.shared.array((64,), nb.float32)
+            # init
+            for j in range(tid, nparams, nb.cuda.blockDim.x):
+                g[j] = 0.0
+            nb.cuda.syncthreads()
+            # accumulate
+            for i in range(tid, npoints, nb.cuda.blockDim.x):
+                li = loss[model, i]
+                for j in range(nparams):
+                    nb.cuda.atomic.add(g, j, jacobian[model, i, j] * li)
+            nb.cuda.syncthreads()
+            # write back
+            for j in range(tid, nparams, nb.cuda.blockDim.x):
+                gradient[model, j, 0] = g[j]
+        threads_per_block = 256
+        blocks_per_grid = self.nmodels
         return func[blocks_per_grid, threads_per_block]
-
 
 
     # --- Hessian ---
@@ -331,21 +338,38 @@ class Fit(ABC, CudaReference) :
 
     @prop(cache=True)
     def gpu_fisher2hessian(self) :
-        @nb.cuda.jit()
-        def func(jacobian, fisher, hessian, ignore) :
-            nmodels, npoints, nparams = jacobian.shape
-            model, param, paramT = nb.cuda.grid(3)
-            if model < nmodels and not ignore[model] and param < nparams and paramT < nparams :
-                s = 0.0
-                for point in range(npoints):
-                    s += jacobian[model, point, param] * jacobian[model, point, paramT] * fisher[model, point]
-                hessian[model, param, paramT] = s
-        threads_per_block = 8, 8, 8
-        blocks_per_grid = (
-                (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
-                (self.nparameters2fit + threads_per_block[1] - 1) // threads_per_block[1],
-                (self.nparameters2fit + threads_per_block[2] - 1) // threads_per_block[2],
-                )
+        @nb.cuda.jit
+        def func(jacobian, fisher, hessian, ignore):
+            model = nb.cuda.blockIdx.x
+            tid   = nb.cuda.threadIdx.x
+            nt    = nb.cuda.blockDim.x
+            if ignore[model]:
+                return
+            npoints = jacobian.shape[1]
+            nparams = jacobian.shape[2]
+            H = nb.cuda.shared.array((64, 64), float32)
+            # init
+            for j in range(tid, nparams, nt):
+                for k in range(j, nparams):
+                    H[j, k] = 0.0
+            nb.cuda.syncthreads()
+            # accumulation (each j owned by one thread)
+            for i in range(tid, npoints, nt):
+                fi = fisher[model, i]
+                for j in range(tid, nparams, nt):
+                    Jij = jacobian[model, i, j]
+                    vj  = Jij * fi
+                    for k in range(j, nparams):
+                        H[j, k] += vj * jacobian[model, i, k]
+            nb.cuda.syncthreads()
+            # write back
+            for j in range(tid, nparams, nt):
+                for k in range(j, nparams):
+                    v = H[j, k]
+                    hessian[model, j, k] = v
+                    hessian[model, k, j] = v
+        threads_per_block = 256
+        blocks_per_grid = self.nmodels
         return func[blocks_per_grid, threads_per_block]
 
 

@@ -235,7 +235,7 @@ class LM(Fit) :
         self.function(*self.variables, *self.data, **self.parameters, out=self.model_data, ignore=self.failed)
         self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.failed)
         deviance2chi2_function = self.gpu_deviance2chi2 if self.cuda else self.cpu_deviance2chi2
-        deviance2chi2_function(self.deviance_data, self.chi2_data, self.improved)
+        deviance2chi2_function(self.deviance_data, self.chi2_data, self.failed)
 
 
 
