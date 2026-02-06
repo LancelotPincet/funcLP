@@ -11,15 +11,15 @@ Here are the references to the various modules to import in **funcLP**.
    :maxdepth: 1
    :caption: Modules
 
-   Function
+   ufunc
    CudaReference
    use_cuda
+   Distribution
+   use_inputs
+   Fit
+   Estimator
    use_broadcasting
    use_shapes
-   Fit
-   use_inputs
    plot
-   ufunc
    make_calculation
-   Distribution
-   Estimator
+   Function
