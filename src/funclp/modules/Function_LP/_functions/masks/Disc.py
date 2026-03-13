@@ -36,7 +36,7 @@ def offset(res, *args) -> (None, None) :
 class Disc(Function):
 
     @ufunc(main=True)
-    def function(x, y, /, r:r=1, mux:mux=0, muy:muy=0, amp:amp=1, offset:offset=0) :
+    def function(x, y, /, r:r=1., mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0.) :
         return amp * (math.sqrt((x-mux)**2 + (y-muy)**2) <= r) + offset
     
     

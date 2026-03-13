@@ -29,7 +29,7 @@ def c(res, *args) -> (None, None) :
 class Polynomial2(Function):
 
     @ufunc(main=True)
-    def function(x, /, a:a=1, b:b=0, c:c=0) :
+    def function(x, /, a:a=1., b:b=0., c:c=0.) :
         return a * x**2 + b * x + c
     
     

@@ -32,7 +32,7 @@ def get_mean(y, x) :
     return num / denom
 
 #Function tools
-@nb.njit(nogil = True)
+@nb.njit(nogil=True, inline="always")
 def j1(z):
     if z <= 8.:
         t = z / 8.

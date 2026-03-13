@@ -53,9 +53,10 @@ class ufunc() :
     ...
     '''
 
-    def __init__(self, *, main=False, data=[]) :
+    def __init__(self, *, main=False, data=[], constants=[]) :
         self.main = main
         self.variable2data = data
+        self.variable2constants = constants
 
     def __call__(self, function):
         '''Decorator logic'''
@@ -82,12 +83,14 @@ class ufunc() :
         # Get variable and parameters of the function 
         self.variables = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key not in self.variable2data]
         self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key in self.variable2data]
-        self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
+        self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key not in self.variable2constants]
+        self.constants = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key in self.variable2constants]
         self.inputs = ', '.join([key for key in parameters.keys()])
         self.d_inputs = ', '.join([key for key in self.variables] + [key for key in self.data] + ['/'] + [key for key in self.parameters])
         self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables]) + ', ' if len(self.variables) > 0 else ''
         self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data]) + ', ' if len(self.data) > 0 else ''
         self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters]) + ', ' if len(self.parameters) > 0 else ''
+        self.indexes_constants = ', '.join([key for key in self.constants]) + ', ' if len(self.constants) > 0 else ''
   
         return self
 
@@ -136,7 +139,7 @@ def func({self.inputs}, out, ignore) :
     for model in nb.prange(nmodels) :
         if ignore[model] : continue
         for point in range(npoints) :
-            out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters})
+            out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
                 glob = {'nb': nb, 'kernel': getattr(instance, f'cpukernel_{name}')}
                 loc = {}
@@ -156,7 +159,7 @@ def func({self.inputs}, out, ignore) :
     nmodels, npoints = out.shape
     model, point = nb.cuda.grid(2)
     if model < nmodels and point < npoints and not ignore[model] :
-        out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters})
+        out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
                 glob = {'nb': nb, 'kernel': getattr(instance, f'gpukernel_{name}')}
                 loc = {}
@@ -181,7 +184,7 @@ def func({self.inputs}, out, ignore) :
         if not self.main : return # Stop if not a main function
 
         # Inputs
-        cls.variables, cls.data, = self.variables, self.data
+        cls.variables, cls.data, cls.constants = self.variables, self.data, self.constants
         @property
         def prop(instance) :
             return {parameter : getattr(instance, parameter) for parameter in self.parameters}
@@ -190,9 +193,34 @@ def func({self.inputs}, out, ignore) :
             for key, value in dic.items() :
                 setattr(instance, key, value)
         cls.parameters = prop
+        @property
+        def prop(instance) :
+            return {constant : getattr(instance, constant) for constant in self.constants}
+        @prop.setter
+        def prop(instance, dic) :
+            for key, value in dic.items() :
+                setattr(instance, key, value)
+        cls.constants = prop
 
-        # Single parameters
+        # Looping on parameters
         for pname, param in self.signature.parameters.items():
+
+            #constant property
+            if pname in self.constants :
+                @property
+                def prop(instance, pname=pname) :
+                    _param = getattr(instance, f'_{pname}', None)
+                    if _param is not None :
+                        return _param
+                    raise SyntaxeError('This constant should be defined at function init time')
+                @prop.setter
+                def prop(instance, value, pname=pname) :
+                    setattr(instance, f'_{pname}', convert(value))
+                setattr(cls, pname, prop)
+
+
+
+            # Single parameters only below
             if pname not in self.parameters : continue
 
             #parameter property
@@ -207,26 +235,7 @@ def func({self.inputs}, out, ignore) :
                 if value is None :
                     setattr(instance, f'_{pname}', None)
                 else :
-                    try :
-                        dtype = value.dtype
-                        if np.issubdtype(dtype, np.bool_) :
-                            value.astype(np.bool_)
-                        elif np.issubdtype(dtype, np.floating) :
-                            value.astype(np.float32)
-                        elif np.issubdtype(dtype, np.integer) :
-                            value.astype(np.int32)
-                        else :
-                            raise TypeError(f'Parameter cannot have {dtype} dtype')
-                    except AttributeError:
-                        if isinstance(value, bool) or isinstance(value, np.bool_) :
-                            value = np.bool_(value)
-                        elif isinstance(value, float) or isinstance(value, np.floating) :
-                            value = np.float32(value)
-                        elif isinstance(value, int) or isinstance(value, np.integer) :
-                            value = np.int32(value)
-                        else :
-                            raise TypeError(f'Parameter cannot have {type(value)} dtype')
-                    setattr(instance, f'_{pname}', value)
+                    setattr(instance, f'_{pname}', convert(value))
             setattr(cls, pname, prop)
 
             # derivative property
@@ -235,7 +244,7 @@ def func({self.inputs}, out, ignore) :
                 inputs_plus = self.inputs.replace(pname, f'{pname} + eps')
                 inputs_minus = self.inputs.replace(pname, f'{pname} - eps')
                 string = f'''
-@ufunc(data={self.variable2data})
+@ufunc(data={self.variable2data}, constants={self.variable2constants})
 def d_param({self.d_inputs}, eps=1e-4) :
     f_plus, f_minus = kernel({inputs_plus}), kernel({inputs_minus})
     if np.isfinite(f_plus) and np.isfinite(f_minus):
@@ -257,7 +266,7 @@ def d_param({self.d_inputs}, eps=1e-4) :
 
             #Default value
             if param.default is not inspect._empty :
-                setattr(cls, f'_{pname}0', np.float32(param.default))
+                setattr(cls, f'_{pname}0', convert(param.default))
             else :
                 raise SyntaxError(f'{pname} parameter should have a default value')
 
@@ -280,6 +289,26 @@ def d_param({self.d_inputs}, eps=1e-4) :
 
 
 
+def convert(value) :
+    try :
+        dtype = value.dtype
+        if np.issubdtype(dtype, np.bool_) :
+            return value.astype(np.bool_)
+        elif np.issubdtype(dtype, np.integer) :
+            return value.astype(np.int32)
+        elif np.issubdtype(dtype, np.floating) :
+            return value.astype(np.float32)
+        else :
+            raise TypeError(f'Parameter cannot have {dtype} dtype')
+    except AttributeError:
+        if isinstance(value, bool) or isinstance(value, np.bool_) :
+            return np.bool_(value)
+        elif isinstance(value, int) or isinstance(value, np.integer) :
+            return np.int32(value)
+        elif isinstance(value, float) or isinstance(value, np.floating) :
+            return np.float32(value)
+        else :
+            raise TypeError(f'Parameter cannot have {type(value)} dtype')
 
 
 # %% Test function run

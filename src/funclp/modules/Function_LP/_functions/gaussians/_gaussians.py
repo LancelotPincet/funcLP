@@ -37,7 +37,7 @@ def get_std(y, x):
     I = np.nansum(y) * pixel
     return I / A / np.sqrt(2 * np.pi)
 
-@nb.njit(nogil = True)
+@nb.njit(nogil=True, inline="always")
 def gausfunc(x, mean=np.float32(0), std=np.float32(1), amp=np.float32(1), offset=np.float32(0), pix=np.float32(-1), num_std=np.float32(-1)) :
     if num_std > 0 and x-mean > num_std * std :
         return 0.
@@ -48,7 +48,7 @@ def gausfunc(x, mean=np.float32(0), std=np.float32(1), amp=np.float32(1), offset
         xmax = (x-mean + pix/2) / math.sqrt(2) / std
         return amp * math.sqrt(math.pi) / math.sqrt(2) * std / pix * (math.erf(xmax) - math.erf(xmin)) + offset
 
-@nb.njit(nogil = True)
+@nb.njit(nogil=True, inline="always")
 def correct_angle(theta, x, y, mux, muy) :
     if theta == 0 :
         return x, y, mux, muy
@@ -58,3 +58,27 @@ def correct_angle(theta, x, y, mux, muy) :
     x, y = x * math.cos(theta) - y * math.sin(theta), x * math.sin(theta) + y * math.cos(theta)
     return x, y, mux, muy
 
+
+
+@nb.njit(nogil=True, inline="always")
+def correct_angle_3D(theta, phi, x, y, z, mux, muy, muz):
+    if theta == 0 and phi == 0:
+        return x, y, z, mux, muy, muz
+
+    # Shift to origin
+    x, y, z = x - mux, y - muy, z - muz
+    mux, muy, muz = 0, 0, 0
+
+    # Convert to radians
+    t = theta / 180 * math.pi
+    p = phi / 180 * math.pi
+
+    # Rotation around Z axis (theta, azimuthal)
+    x, y = (x * math.cos(t) - y * math.sin(t),
+             x * math.sin(t) + y * math.cos(t))
+
+    # Rotation around Y axis (phi, polar)
+    x, z = (x * math.cos(p) + z * math.sin(p),
+            -x * math.sin(p) + z * math.cos(p))
+
+    return x, y, z, mux, muy, muz

@@ -43,6 +43,10 @@ class Function(ABC, CudaReference) :
         return self.__class__.__name__
     def __init__(self, **kwargs) :
         selfkwargs(self, kwargs)
+        for constant in self.constants.keys() :
+            if not hasattr(self, constant) :
+                raise SyntaxeError(f'Please define {constant} constant to initialise this function')
+
 
     @abstractmethod
     def function(self) :

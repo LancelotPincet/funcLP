@@ -30,7 +30,7 @@ def offset(res, *args) -> (None, None) :
 class Airy(Function):
 
     @ufunc(main=True)
-    def function(x, /, mu:mu=0, amp:amp=1, offset:offset=0, wl=550, NA=1.5, tol=1) :
+    def function(x, /, mu:mu=0., amp:amp=1., offset:offset=0., wl=550., NA=1.5, tol=1.) :
         r = abs(x-mu)
         if r < tol :
             return amp + offset

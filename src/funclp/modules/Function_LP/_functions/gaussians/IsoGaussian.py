@@ -35,7 +35,7 @@ def offset(res, *args) -> (None, None) :
 class IsoGaussian(Function):
 
     @ufunc(main=True)
-    def function(x, y, /, mux:mux=0, muy:muy=0, sig:sig=1/(2*np.pi), amp:amp=1, offset:offset=0, pixx=-1, pixy=-1, nsig=-1) :
+    def function(x, y, /, mux:mux=0., muy:muy=0., sig:sig=1/(2*np.pi), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., nsig=-1.) :
         return amp * gausfunc(x, mux, sig, 1, 0, pixx, nsig) * gausfunc(y, muy, sig, 1, 0, pixy, nsig) + offset
     
     

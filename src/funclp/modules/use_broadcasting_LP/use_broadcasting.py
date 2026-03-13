@@ -56,9 +56,9 @@ def use_broadcasting(xp, variables, data, parameters, variables_shape, data_shap
 
     # Broadcasting
     nmodels, npoints = out_shape
-    variables = [xp.broadcast_to(xp.asarray(arr).astype(dtype), variables_shape).reshape(npoints) for arr in variables]
-    data = [xp.broadcast_to(xp.asarray(arr).astype(dtype), data_shape).reshape((nmodels, npoints)) for arr in data]
-    parameters = [xp.broadcast_to(xp.asarray(arr).astype(dtype), parameters_shape).reshape(nmodels) for arr in parameters]
+    variables = [xp.broadcast_to(xp.asarray(arr), variables_shape).reshape(npoints) for arr in variables]
+    data = [xp.broadcast_to(xp.asarray(arr), data_shape).reshape((nmodels, npoints)) for arr in data]
+    parameters = [xp.broadcast_to(xp.asarray(arr), parameters_shape).reshape(nmodels) for arr in parameters]
 
     return variables, data, parameters, dtype
 

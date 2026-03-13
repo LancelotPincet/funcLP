@@ -38,7 +38,7 @@ def offset(res, *args) -> (None, None) :
 class Rectangle(Function):
 
     @ufunc(main=True)
-    def function(x, y, /, l:l=1, ratio:ratio=1, mux:mux=0, muy:muy=0, amp:amp=1, offset:offset=0, theta=0) :
+    def function(x, y, /, l:l=1., ratio:ratio=1., mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., theta=0.) :
         theta = -np.radians(theta)
         x, y = x * math.cos(theta) + y * math.sin(theta), y * math.cos(theta) - x * math.sin(theta)
         mux, muy = mux*math.cos(theta) + muy*math.sin(theta), muy*math.cos(theta) - mux*math.sin(theta)

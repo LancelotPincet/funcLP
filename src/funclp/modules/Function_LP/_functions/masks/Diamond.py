@@ -36,7 +36,7 @@ def offset(res, *args) -> (None, None) :
 class Diamond(Function):
 
     @ufunc(main=True)
-    def function(x, y, /, d:d=1, mux:mux=0, muy:muy=0, amp:amp=1, offset:offset=0) :
+    def function(x, y, /, d:d=1., mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0.) :
         r = math.sqrt((x - mux)**2 + (y - muy)**2)
         mask = r <= (d * math.sqrt((1 - 1 / (abs(y - muy) / abs(x - mux) + 1))**2 + (1 / (abs(y - muy) / abs(x - mux) + 1))**2))
         return amp * mask + offset

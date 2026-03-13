@@ -37,7 +37,7 @@ def offset(res, *vars) -> (None, None) :
 class Gaussian2D(Function):
 
     @ufunc(main=True)
-    def function(x, y, /, mux:mux=0, muy:muy=0, sigx:sigx=1/(2*np.pi), sigy:sigy=1/(2*np.pi), amp:amp=1, offset:offset=0, pixx=-1, pixy=-1, nsig=-1, theta=0) :
+    def function(x, y, /, mux:mux=0., muy:muy=0., sigx:sigx=1/(2*np.pi), sigy:sigy=1/(2*np.pi), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., nsig=-1., theta=0.) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
         return amp * gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) + offset
     
@@ -97,7 +97,7 @@ class Gaussian2D(Function):
         return self.amp * (2 * np.pi) * self.sig**2
     @integ.setter
     def integ(self,value) :
-        self.amp = value / np.sqrt(2 * np.pi) / self.sig**2
+        self.amp = value / (2 * np.pi) / self.sig**2
     @property
     def proba(self) :
         return np.erf(self.nsig / np.sqrt(2)) **2
@@ -152,6 +152,10 @@ class Gaussian2D(Function):
     @sig.setter
     def sig(self, value) :
         self.sigx, self.sigy = value, value
+    @property
+    def ecc(self) :
+        a, b = np.min(np.vstack((self.sigx, self.sigy)), axis=0), np.max(np.vstack((self.sigx, self.sigy)), axis=0)
+        return np.sqrt(1 - (a/b)**2)
 
 
 

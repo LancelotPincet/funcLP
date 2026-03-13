@@ -27,7 +27,7 @@ def b(res, *args) -> (None, None) :
 class Polynomial1(Function):
 
     @ufunc(main=True)
-    def function(x, /, a:a=1, b:b=0) :
+    def function(x, /, a:a=1., b:b=0.) :
         return a * x + b
     
     
