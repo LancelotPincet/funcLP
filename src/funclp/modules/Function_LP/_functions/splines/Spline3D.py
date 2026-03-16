@@ -40,13 +40,17 @@ class Spline3D(Function):
             kx, ky, kz = int(kx), int(ky), int(kz)
 
             # Flatten coordinate arrays — accepts any shape (broadcastable inputs)
+            model2interp = np.asarray(model2interp)
+            if model2interp.size == x2interp.size and model2interp.size == y2interp.size :
+                x2interp = np.asarray(x2interp)[0:1, 0:1, :]
+                y2interp = np.asarray(y2interp)[0:1, :, 0:1]
+                z2interp = np.asarray(z2interp)[:, 0:1, 0:1]
             x2interp = np.asarray(x2interp).ravel()
             y2interp = np.asarray(y2interp).ravel()
             z2interp = np.asarray(z2interp).ravel()
             nx, ny, nz = len(x2interp), len(y2interp), len(z2interp)
 
             # model2interp must be (nx, ny, nz) after squeezing broadcast dims
-            model2interp = np.asarray(model2interp)
             if model2interp.shape != (nx, ny, nz):
                 raise ValueError(
                     f'model2interp must have shape (nx, ny, nz) = '
