@@ -58,7 +58,9 @@ class Spline2D(Function):
             ny = len(ty) - ky - 1
             coeffs = c[:nx * ny].reshape(ny, nx).astype(np.float32)
 
-        super().__init__(kx=kx, ky=ky, tx=tx, ty=ty, coeffs=coeffs)
+            kwargs.update(dict(kx=kx, ky=ky, tx=tx, ty=ty, coeffs=coeffs))
+
+        super().__init__(**kwargs)
 
     @ufunc(main=True, constants=["tx", "ty", "coeffs"])
     def function(x, y, /, mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., kx=3, ky=3, tx=None, ty=None, coeffs=None) :
