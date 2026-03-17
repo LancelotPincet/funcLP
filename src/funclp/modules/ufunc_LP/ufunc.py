@@ -53,10 +53,11 @@ class ufunc() :
     ...
     '''
 
-    def __init__(self, *, main=False, data=[], constants=[]) :
+    def __init__(self, *, main=False, data=[], constants=[], fastmath=True) :
         self.main = main
         self.variable2data = data
         self.variable2constants = constants
+        self.fastmath = fastmath
 
     def __call__(self, function):
         '''Decorator logic'''
@@ -133,7 +134,7 @@ class ufunc() :
             func = getattr(cls, f'_cpu_{name}', None)
             if func is None:
                 string = f'''
-@nb.njit()
+@nb.njit(fastmath=fastmath)
 def func({self.inputs}, out, ignore) :
     nmodels, npoints = out.shape
     for model in nb.prange(nmodels) :
@@ -141,7 +142,7 @@ def func({self.inputs}, out, ignore) :
         for point in range(npoints) :
             out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
-                glob = {'nb': nb, 'kernel': getattr(instance, f'cpukernel_{name}')}
+                glob = {'nb': nb, 'kernel': getattr(instance, f'cpukernel_{name}'), 'fastmath': self.fastmath}
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
@@ -154,14 +155,14 @@ def func({self.inputs}, out, ignore) :
             func = getattr(cls, f'_gpu_{name}', None)
             if func is None:
                 string = f'''
-@nb.cuda.jit()
+@nb.cuda.jit(fastmath=fastmath)
 def func({self.inputs}, out, ignore) :
     nmodels, npoints = out.shape
     model, point = nb.cuda.grid(2)
     if model < nmodels and point < npoints and not ignore[model] :
         out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
-                glob = {'nb': nb, 'kernel': getattr(instance, f'gpukernel_{name}')}
+                glob = {'nb': nb, 'kernel': getattr(instance, f'gpukernel_{name}'), 'fastmath': self.fastmath}
                 loc = {}
                 exec(string, glob, loc)
                 func = loc['func']
@@ -212,7 +213,7 @@ def func({self.inputs}, out, ignore) :
                     _param = getattr(instance, f'_{pname}', None)
                     if _param is not None :
                         return _param
-                    raise SyntaxeError('This constant should be defined at function init time')
+                    raise SyntaxError('This constant should be defined at function init time')
                 @prop.setter
                 def prop(instance, value, pname=pname) :
                     setattr(instance, f'_{pname}', convert(value))
@@ -244,7 +245,7 @@ def func({self.inputs}, out, ignore) :
                 inputs_plus = self.inputs.replace(pname, f'{pname} + eps')
                 inputs_minus = self.inputs.replace(pname, f'{pname} - eps')
                 string = f'''
-@ufunc(data={self.variable2data}, constants={self.variable2constants})
+@ufunc(data={self.variable2data}, constants={self.variable2constants}, fastmath=False)
 def d_param({self.d_inputs}, eps=1e-4) :
     f_plus, f_minus = kernel({inputs_plus}), kernel({inputs_minus})
     if np.isfinite(f_plus) and np.isfinite(f_minus):

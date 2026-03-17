@@ -27,7 +27,7 @@ def get_mean(y, x) :
     denom = np.nansum(y0)
     return num / denom
 
-@nb.njit
+@nb.njit()
 def get_r(y,x) :
     y,x = y.ravel(), x.ravel()
     y = y[np.argsort(x)]

@@ -22,7 +22,7 @@ def get_mean(y, x):
     return num / denom
 
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def find_span(t, k, x):
     n = len(t) - k - 1
     if x >= t[n]:
@@ -40,7 +40,7 @@ def find_span(t, k, x):
     return lo
 
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def bspline1d(tx, coeffs, kx, x):
     """
     Evaluate a 1D B-spline at x.
@@ -97,7 +97,7 @@ def bspline1d(tx, coeffs, kx, x):
     return d5
 
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def bspline2d(tx, ty, coeffs, kx, ky, x, y):
     """
     Evaluate a 2D tensor-product B-spline at (x, y).
@@ -171,7 +171,7 @@ def bspline2d(tx, ty, coeffs, kx, ky, x, y):
     return r0 if ky == 0 else (r1 if ky == 1 else (r2 if ky == 2 else (r3 if ky == 3 else (r4 if ky == 4 else r5))))
 
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x, y, z):
     if (x < tx[kx] or x > tx[len(tx) - kx - 1] or y < ty[ky] or y > ty[len(ty) - ky - 1] or z < tz[kz] or z > tz[len(tz) - kz - 1]):
         return nb.float32(0.0)

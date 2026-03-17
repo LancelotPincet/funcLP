@@ -37,7 +37,7 @@ def get_std(y, x):
     I = np.nansum(y) * pixel
     return I / A / np.sqrt(2 * np.pi)
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def gausfunc(x, mean=np.float32(0), std=np.float32(1), amp=np.float32(1), offset=np.float32(0), pix=np.float32(-1), num_std=np.float32(-1)) :
     if num_std > 0 and x-mean > num_std * std :
         return 0.
@@ -48,7 +48,7 @@ def gausfunc(x, mean=np.float32(0), std=np.float32(1), amp=np.float32(1), offset
         xmax = (x-mean + pix/2) / math.sqrt(2) / std
         return amp * math.sqrt(math.pi) / math.sqrt(2) * std / pix * (math.erf(xmax) - math.erf(xmin)) + offset
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def correct_angle(theta, x, y, mux, muy) :
     if theta == 0 :
         return x, y, mux, muy
@@ -60,7 +60,7 @@ def correct_angle(theta, x, y, mux, muy) :
 
 
 
-@nb.njit(nogil=True, inline="always")
+@nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def correct_angle_3D(theta, phi, x, y, z, mux, muy, muz):
     if theta == 0 and phi == 0:
         return x, y, z, mux, muy, muz
