@@ -48,6 +48,8 @@ def bspline1d(tx, coeffs, kx, x):
     CUDA device function compatible.
     Supports kx up to 5.
     """
+    if x < tx[kx] or x > tx[len(tx) - kx - 1]:
+        return nb.float32(0.0)
     ix = find_span(tx, kx, x)
 
     # Local fixed-size scratch (max degree 5 => 6 values)
@@ -102,6 +104,8 @@ def bspline2d(tx, ty, coeffs, kx, ky, x, y):
     Reduces to ky+1 calls of 1D de Boor along x, then one along y.
     No dynamic allocation — CUDA device function compatible.
     """
+    if (x < tx[kx] or x > tx[len(tx) - kx - 1] or y < ty[ky] or y > ty[len(ty) - ky - 1]):
+        return nb.float32(0.0)
     ix = find_span(tx, kx, x)
     iy = find_span(ty, ky, y)
     base_x = ix - kx
@@ -169,6 +173,8 @@ def bspline2d(tx, ty, coeffs, kx, ky, x, y):
 
 @nb.njit(nogil=True, inline="always")
 def bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x, y, z):
+    if (x < tx[kx] or x > tx[len(tx) - kx - 1] or y < ty[ky] or y > ty[len(ty) - ky - 1] or z < tz[kz] or z > tz[len(tz) - kz - 1]):
+        return nb.float32(0.0)
     ix = find_span(tx, kx, x)
     iy = find_span(ty, ky, y)
     iz = find_span(tz, kz, z)
