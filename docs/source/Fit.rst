@@ -1,7 +1,7 @@
-template_lowername.Fit module
-template_equals===========
+funclp.Fit module
+=================
 
-.. autoclass:: template_lowername.Fit
+.. autoclass:: funclp.Fit
    :members: 
    :show-inheritance:
    :undoc-members:

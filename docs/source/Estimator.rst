@@ -1,7 +1,7 @@
-template_lowername.Estimator module
-template_equals=================
+funclp.Estimator module
+=======================
 
-.. autoclass:: template_lowername.Estimator
+.. autoclass:: funclp.Estimator
    :members: 
    :show-inheritance:
    :undoc-members:

@@ -1,4 +1,4 @@
-template_lowername.use_shapes module
-template_equals==================
+funclp.use_shapes module
+========================
 
-.. autofunction:: template_lowername.use_shapes
+.. autofunction:: funclp.use_shapes

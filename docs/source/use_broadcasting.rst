@@ -1,4 +1,4 @@
-template_lowername.use_broadcasting module
-template_equals========================
+funclp.use_broadcasting module
+==============================
 
-.. autofunction:: template_lowername.use_broadcasting
+.. autofunction:: funclp.use_broadcasting

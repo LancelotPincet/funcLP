@@ -1,7 +1,7 @@
-template_lowername.CudaReference module
-template_equals=====================
+funclp.CudaReference module
+===========================
 
-.. autoclass:: template_lowername.CudaReference
+.. autoclass:: funclp.CudaReference
    :members: 
    :show-inheritance:
    :undoc-members:

@@ -1,7 +1,7 @@
-template_lowername.Distribution module
-template_equals====================
+funclp.Distribution module
+==========================
 
-.. autoclass:: template_lowername.Distribution
+.. autoclass:: funclp.Distribution
    :members: 
    :show-inheritance:
    :undoc-members:

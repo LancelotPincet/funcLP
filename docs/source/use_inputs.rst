@@ -1,4 +1,4 @@
-template_lowername.use_inputs module
-template_equals==================
+funclp.use_inputs module
+========================
 
-.. autofunction:: template_lowername.use_inputs
+.. autofunction:: funclp.use_inputs

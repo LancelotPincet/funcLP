@@ -1,4 +1,4 @@
-template_lowername.plot module
-template_equals============
+funclp.plot module
+==================
 
-.. autofunction:: template_lowername.plot
+.. autofunction:: funclp.plot
