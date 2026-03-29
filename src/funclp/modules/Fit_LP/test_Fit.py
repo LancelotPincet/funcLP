@@ -17,7 +17,10 @@ Fit : Class defining fitting algorithms.
 # %% Libraries
 from corelp import debug
 import pytest
-from funclp import Fit
+from funclp import LM, IsoGaussian, MLE, Poisson
+import numpy as np
+from time import perf_counter
+from scipy.optimize import curve_fit
 debug_folder = debug(__file__)
 
 
@@ -27,49 +30,65 @@ def test_function() :
     '''
     Test Fit function
     '''
-    print('Hello world!')
+    
+    # Making coordinates
+    v = np.linspace(-500, 500, 11)
+    X, Y = np.meshgrid(v, v)
+    npoints = 20
+    
+    # Making experimental data
+    sigma = 0.21*670/1.5 * np.random.normal(1, 0.1, npoints) #nm
+    mux = np.random.uniform(-50, 50, npoints)
+    muy = np.random.uniform(-50, 50, npoints)
+    N = 2000 #photons
+    groundtruth_function = IsoGaussian(sig=sigma, mux=mux, muy=muy, pix=100, integ=N)
+    data = groundtruth_function(X, Y)
+    data = np.random.poisson(data)
+
+    # Making curve_fit fit as reference
+    cf_mux = np.zeros(npoints)
+    cf_muy = np.zeros(npoints)
+    cf_sig = np.zeros(npoints)
+    tic = perf_counter()
+    for i in range(npoints):
+        try:
+            def model(XY, mux, muy, sig):
+                f = IsoGaussian(mux=mux, muy=muy, sig=sig, pix=100, integ=N)
+                return f(XY[0], XY[1]).ravel().astype(float)
+            p0 = [0., 0., 0.21*670/1.5]
+            popt, _ = curve_fit(model, (X, Y), data[i].ravel().astype(float), p0=p0, method='lm')
+            cf_mux[i], cf_muy[i], cf_sig[i] = popt
+        except RuntimeError:
+            cf_mux[i], cf_muy[i], cf_sig[i] = np.nan, np.nan, np.nan
+    cf_error_mux = cf_mux - groundtruth_function.mux
+    cf_error_muy = cf_muy - groundtruth_function.muy
+    cf_error_sig = cf_sig - groundtruth_function.sig
+    toc = perf_counter()
+    print(f'\ncurve_fit took {toc-tic:.3f}s')
+    print(f'curve_fit failed: {np.sum(np.isnan(cf_sig))}/{npoints}')
+    print(f'curve_fit Mux error: {np.nanmean(cf_error_mux):.3f} +/- {np.nanstd(cf_error_mux):.3f}')
+    print(f'curve_fit Muy error: {np.nanmean(cf_error_muy):.3f} +/- {np.nanstd(cf_error_muy):.3f}')
+    print(f'curve_fit Sig error: {np.nanmean(cf_error_sig):.3f} +/- {np.nanstd(cf_error_sig):.3f}')
+    
+
+    # Making Fit
+    tic = perf_counter()
+    function = IsoGaussian(sig=np.full(npoints, 0.21*670/1.5), pix=100, integ=N)
+    estimator = MLE(Poisson())
+    fit = LM(function, estimator)
+    fit(data, X, Y)
+    error_mux = function.mux - groundtruth_function.mux
+    error_muy = function.muy - groundtruth_function.muy
+    error_sig = function.sig - groundtruth_function.sig
+    toc = perf_counter()
+    print(f'\nCPU took {toc-tic:.3f}s')
+    print(f'CPU failed: {np.sum(fit.converged == -1)}/{npoints}')
+    print(f'CPU Mux error: {np.mean(error_mux):.3f} +/- {np.std(error_mux):.3f}')
+    print(f'CPU Muy error: {np.mean(error_muy):.3f} +/- {np.std(error_muy):.3f}')
+    print(f'CPU Sig error: {np.mean(error_sig):.3f} +/- {np.std(error_sig):.3f}')
+    print(fit.converged)
 
 
-
-# %% Instance fixture
-@pytest.fixture()
-def instance() :
-    '''
-    Create a new instance at each test function
-    '''
-    return Fit()
-
-def test_instance(instance) :
-    '''
-    Test on fixture
-    '''
-    pass
-
-
-# %% Returns test
-@pytest.mark.parametrize("args, kwargs, expected, message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_returns(args, kwargs, expected, message) :
-    '''
-    Test Fit return values
-    '''
-    assert Fit(*args, **kwargs) == expected, message
-
-
-
-# %% Error test
-@pytest.mark.parametrize("args, kwargs, error, error_message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_errors(args, kwargs, error, error_message) :
-    '''
-    Test Fit error values
-    '''
-    with pytest.raises(error, match=error_message) :
-        Fit(*args, **kwargs)
 
 
 

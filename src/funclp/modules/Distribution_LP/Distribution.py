@@ -53,29 +53,29 @@ class Distribution(ABC, CudaReference) :
         selfkwargs(self, kwargs)
 
     @abstractmethod
-    def pdf(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def pdf(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(1.)
     def __call__(self, *args, **kwargs) :
         return self._pdf(*args, **kwargs)
 
     @abstractmethod
-    def loglikelihood_reduced(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def loglikelihood_reduced(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(0.)
 
     @abstractmethod
-    def loglikelihood(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def loglikelihood(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(0.)
 
     @abstractmethod
-    def dloglikelihood(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def dloglikelihood(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(0.)
 
     @abstractmethod
-    def d2loglikelihood(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def d2loglikelihood(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(0.)
 
     @abstractmethod
-    def fisher(self, raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
+    def fisher(raw_data, model_data, /, weights=np.float32(1.), ignore=np.bool_(False)):
         return np.float32(0.)
     
 

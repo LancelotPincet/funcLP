@@ -39,11 +39,15 @@ def get_std(y, x):
 
 @nb.njit(nogil=True, inline="always", fastmath=True, cache=True)
 def gausfunc(x, mean=np.float32(0), std=np.float32(1), amp=np.float32(1), offset=np.float32(0), pix=np.float32(-1), num_std=np.float32(-1)) :
+    if abs(std) < 1e-12 :
+        std = np.float32(1e-12)
     if num_std > 0 and x-mean > num_std * std :
         return 0.
     if pix < 0 :
         return amp * math.exp(-(x - mean)**2 / 2 / std**2) + offset
     else :
+        if abs(pix) < 1e-12 :
+            pix = np.float32(1e-12)
         xmin = (x-mean - pix/2) / math.sqrt(2) / std
         xmax = (x-mean + pix/2) / math.sqrt(2) / std
         return amp * math.sqrt(math.pi) / math.sqrt(2) * std / pix * (math.erf(xmax) - math.erf(xmin)) + offset

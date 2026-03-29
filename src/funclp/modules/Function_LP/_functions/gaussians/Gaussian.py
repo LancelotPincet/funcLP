@@ -42,14 +42,20 @@ class Gaussian(Function):
     # Parameters derivatives
     @ufunc()
     def d_mu(x, /, mu, sig, amp, offset, pix, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         ex = gausfunc(x, mu, sig, 1, 0, pix, nsig)
         return amp * ex * (x - mu) / sig**2
     @ufunc()
     def d_sig(x, /, mu, sig, amp, offset, pix, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         ex = gausfunc(x, mu, sig, 1, 0, pix, nsig)
         return amp * ex * (x - mu)**2 / sig**3
     @ufunc()
     def d_amp(x, /, mu, sig, amp, offset, pix, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         ex = gausfunc(x, mu, sig, 1, 0, pix, nsig)
         return ex
     @ufunc()
@@ -62,10 +68,10 @@ class Gaussian(Function):
     
     @property
     def integ(self) :
-        return self.amp * np.sqrt(2 * np.pi) * self.sig
+        return self.amp * np.sqrt(2 * np.pi) * self.sig / np.abs(self.pix)
     @integ.setter
     def integ(self,value) :
-        self.amp = value / np.sqrt(2 * np.pi) / self.sig
+        self.amp = value / np.sqrt(2 * np.pi) / self.sig * np.abs(self.pix)
     @property
     def proba(self) :
         return np.erf(self.nsig / np.sqrt(2))

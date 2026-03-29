@@ -21,7 +21,7 @@ class LM(Fit) :
 
     # Attributs
     damping_init = 1e-2 #lm damping
-    damping_increase, damping_decrease = 7.0, 0.4 # Factor to apply when damping
+    damping_increase, damping_decrease = 2.0, 0.7 # Factor to apply when damping
     damping_min, damping_max = 1e-6, 1e6 #damping limit values
     max_retries = 10 # Maximum of step retries for a given hessian
 
@@ -35,6 +35,9 @@ class LM(Fit) :
 
         # Reset cache
         self.hessian_cache[:] = self.hessian_data
+
+        # Scale
+        self.scale()
 
         # Looping several time on a given hessian with different dampings
         for _ in range(self.max_retries) :
@@ -56,6 +59,46 @@ class LM(Fit) :
             self.improving()
             if self.improved.all() :
                 break
+
+
+
+    # --- Scale ---
+
+    def scale(self) :
+        scale_function = self.gpu_scale if self.cuda else self.cpu_scale
+        scale_function(self.parameters.T, self.gradient_data, self.hessian_cache, self.parameter_scale, self.improved)
+
+    @prop(cache=True)
+    def cpu_scale(self) :
+        @nb.njit(parallel=True)
+        def func(parameters, gradient, hessian, scale, ignore) :
+            nmodels, nparams = parameters.shape
+            for model in nb.prange(nmodels) :
+                if ignore[model] : continue
+                for param in range(nparams) :
+                    scale[model, param] = max(abs(parameters[model, param]), 1.0)
+                    gradient[model, param] /= scale[model, param]
+                for param in range(nparams) :
+                    for paramT in range(nparams) :
+                        hessian[model, param, paramT] /= scale[model, param] * scale[model, paramT]
+        return func
+
+    @prop(cache=True)
+    def gpu_scale(self) :
+        @nb.cuda.jit()
+        def func(parameters, gradient, hessian, scale, ignore) :
+            nmodels, nparams = parameters.shape
+            model = nb.cuda.grid(1)
+            if model < nmodels and not ignore[model] :
+                for param in range(nparams):
+                    scale[model, param] = max(abs(parameters[model, param]), 1.0)
+                    gradient[model, param] /= scale[model, param]
+                for param in range(nparams):
+                    for paramT in range(nparams):
+                        hessian[model, param, paramT] /= scale[model, param] * scale[model, paramT]
+        threads_per_block = 128
+        blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
+        return func[blocks_per_grid, threads_per_block]
 
 
 
@@ -103,12 +146,12 @@ class LM(Fit) :
 
     def solve(self) :
         solve_function = self.gpu_solve if self.cuda else self.cpu_solve
-        solve_function(self.hessian_data, self.gradient_data, self.parameter_steps, self.failed)
+        solve_function(self.hessian_data, self.gradient_data, self.parameter_steps, self.parameter_scale, self.failed)
 
     @prop(cache=True)
     def cpu_solve(self) :
         @nb.njit(parallel=True)
-        def func(hessian, gradient, steps, ignore) :
+        def func(hessian, gradient, steps, scales, ignore) :
             nmodels, nparams, _ = hessian.shape
             for model in nb.prange(nmodels):
                 if ignore[model]: continue
@@ -131,22 +174,25 @@ class LM(Fit) :
                     continue
                 # --- Forward substitution: L y = -g ---
                 for i in range(nparams):
-                    s = -gradient[model, i, 0]
+                    s = -gradient[model, i]
                     for k in range(i):
-                        s -= hessian[model, i, k] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, i, k] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 # --- Back substitution: Lᵀ x = y ---
                 for i in range(nparams - 1, -1, -1):
-                    s = steps[model, i, 0]
+                    s = steps[model, i]
                     for k in range(i + 1, nparams):
-                        s -= hessian[model, k, i] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, k, i] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
+                # --- Unscale: x = S * x_scaled ---
+                for i in range(nparams):
+                    steps[model, i] *= scales[model, i]
         return func
 
     @prop(cache=True)
     def gpu_solve(self) :
         @nb.cuda.jit()
-        def func(hessian, gradient, steps, ignore) :
+        def func(hessian, gradient, steps, scales, ignore) :
             model = nb.cuda.blockIdx.x
             tid = nb.cuda.threadIdx.x
             nparams = hessian.shape[1]
@@ -176,19 +222,23 @@ class LM(Fit) :
             # --- Forward substitution: L y = -g ---
             for i in range(nparams):
                 if tid == i:
-                    s = -gradient[model, i, 0]
+                    s = -gradient[model, i]
                     for k in range(i):
-                        s -= hessian[model, i, k] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, i, k] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 nb.cuda.syncthreads()
             # --- Back substitution: Lᵀ x = y ---
             for i in range(nparams - 1, -1, -1):
                 if tid == i:
-                    s = steps[model, i, 0]
+                    s = steps[model, i]
                     for k in range(i + 1, nparams):
-                        s -= hessian[model, k, i] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, k, i] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 nb.cuda.syncthreads()
+            # --- Unscale: x = S * x_scaled ---
+            if tid < nparams:
+                steps[model, tid] *= scales[model, tid]
+            nb.cuda.syncthreads()
         threads_per_block = 64
         blocks_per_grid = self.nmodels
         return func[blocks_per_grid, threads_per_block]
@@ -209,7 +259,7 @@ class LM(Fit) :
             for model in nb.prange(nmodels) :
                 if ignore[model] : continue
                 for param in range(nparams) :
-                    parameters[model, param] += parameter_steps[model, param, 0]
+                    parameters[model, param] += parameter_steps[model, param]
         return func
 
     @prop(cache=True)
@@ -219,7 +269,7 @@ class LM(Fit) :
             nmodels, nparams = parameters.shape
             model, param = nb.cuda.grid(2)
             if model < nmodels and not ignore[model] and param < nparams :
-                parameters[model, param] += parameter_steps[model, param, 0]
+                parameters[model, param] += parameter_steps[model, param]
         threads_per_block = 16, 16
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -258,8 +308,11 @@ class LM(Fit) :
                     if damping[model] < damping_min :
                         damping[model] = damping_min
                 else : #Worse
-                    for param in range(nparams) :
-                        parameters[model, param] -= parameter_steps[model, param, 0]
+                    # If solve failed, no step was applied. Reverting an undefined step
+                    # corrupts parameters, so revert only when a step was really taken.
+                    if not failed[model] :
+                        for param in range(nparams) :
+                            parameters[model, param] -= parameter_steps[model, param]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up
@@ -282,8 +335,11 @@ class LM(Fit) :
                     if damping[model] < damping_min :
                         damping[model] = damping_min
                 else : #Worse
-                    for param in range(nparams) :
-                        parameters[model, param] -= parameter_steps[model, param, 0]
+                    # If solve failed, no step was applied. Reverting an undefined step
+                    # corrupts parameters, so revert only when a step was really taken.
+                    if not failed[model] :
+                        for param in range(nparams) :
+                            parameters[model, param] -= parameter_steps[model, param]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up

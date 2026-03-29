@@ -51,10 +51,10 @@ class Gaussian3D(Function):
     
     @property
     def integ(self) :
-        return self.amp * (2 * np.pi)**(3/2) * self.sig**3
+        return self.amp * (2 * np.pi)**(3/2) * self.sig**3 / np.abs(self.pix)**3
     @integ.setter
     def integ(self,value) :
-        self.amp = value / (2 * np.pi)**(3/2) / self.sig**2
+        self.amp = value / (2 * np.pi)**(3/2) / self.sig**2 * np.abs(self.pix)**3
     @property
     def proba(self) :
         return np.erf(self.nsig / np.sqrt(2)) **3

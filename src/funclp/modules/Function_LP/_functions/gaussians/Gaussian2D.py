@@ -47,6 +47,10 @@ class Gaussian2D(Function):
     @ufunc()
     def d_mux(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
+        if abs(sigx) < 1e-12 :
+            sigx = np.float32(1e-12)
+        if abs(sigy) < 1e-12 :
+            sigy = np.float32(1e-12)
         exx = gausfunc(x, mux, sigx, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         if theta == 0 :
@@ -55,6 +59,10 @@ class Gaussian2D(Function):
     @ufunc()
     def d_muy(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
+        if abs(sigx) < 1e-12 :
+            sigx = np.float32(1e-12)
+        if abs(sigy) < 1e-12 :
+            sigy = np.float32(1e-12)
         exx = gausfunc(x, mux, sigx, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         if theta == 0 :
@@ -63,12 +71,20 @@ class Gaussian2D(Function):
     @ufunc()
     def d_sigx(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
+        if abs(sigx) < 1e-12 :
+            sigx = np.float32(1e-12)
+        if abs(sigy) < 1e-12 :
+            sigy = np.float32(1e-12)
         exx = gausfunc(x, mux, sigx, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         return amp * exx * exy * (x - mux)**2 / sigx**3
     @ufunc()
     def d_sigy(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
+        if abs(sigx) < 1e-12 :
+            sigx = np.float32(1e-12)
+        if abs(sigy) < 1e-12 :
+            sigy = np.float32(1e-12)
         exx = gausfunc(x, mux, sigx, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         return amp * exx * exy * (y - muy)**2 / sigy**3
@@ -84,6 +100,10 @@ class Gaussian2D(Function):
     @ufunc()
     def d_theta(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
+        if abs(sigx) < 1e-12 :
+            sigx = np.float32(1e-12)
+        if abs(sigy) < 1e-12 :
+            sigy = np.float32(1e-12)
         exx = gausfunc(x, mux, sigx, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         return amp * exx * exy * (x - mux) * (y - muy) * (1 / sigx**2 - 1 / sigy**2)
@@ -94,10 +114,10 @@ class Gaussian2D(Function):
     
     @property
     def integ(self) :
-        return self.amp * (2 * np.pi) * self.sig**2
+        return self.amp * (2 * np.pi) * self.sig**2 / self.pix**2
     @integ.setter
     def integ(self,value) :
-        self.amp = value / (2 * np.pi) / self.sig**2
+        self.amp = value / (2 * np.pi) / self.sig**2 * self.pix**2
     @property
     def proba(self) :
         return np.erf(self.nsig / np.sqrt(2)) **2

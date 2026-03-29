@@ -18,17 +18,17 @@ class MLE(Estimator) :
 
     def deviance(self, raw_data, model_data, /, weights=1, **kwargs) :
         ''' How well the model fits the data '''
-        weights *= -2
+        weights = (-2) * weights
         return self.distribution.loglikelihood(raw_data, model_data, weights=weights, **kwargs)
 
     def loss(self, raw_data, model_data, /, weights=1, **kwargs) :
         ''' Loss for gradient descent '''
-        weights *= -1
+        weights = (-1) * weights
         return self.distribution.dloglikelihood(raw_data, model_data, weights=weights, **kwargs)
 
     def observed(self, raw_data, model_data, /, weights=1, **kwargs) :
         ''' Observed Hessian (negative second derivative)'''
-        weights *= -1
+        weights = (-1) * weights
         return self.distribution.d2loglikelihood(raw_data, model_data, weights=weights, **kwargs)
 
     def fisher(self, raw_data, model_data, /, weights=1, **kwargs) :

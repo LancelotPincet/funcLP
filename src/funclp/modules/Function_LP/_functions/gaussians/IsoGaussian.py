@@ -23,7 +23,7 @@ def mux(res, *args) -> (None, None) :
     return get_mean(res, args[0])
 def muy(res, *args) -> (None, None) :
     return get_mean(res, args[1])
-def sig(res, *args) -> (0, None) :
+def sig(res, *args) -> (1e-6, None) :
     return np.sqrt(get_std(res, args[0]) * get_std(res, args[1]))
 def amp(res, *args) -> (None, None) :
     return get_amp(res)
@@ -43,16 +43,22 @@ class IsoGaussian(Function):
     # Parameters derivatives
     @ufunc()
     def d_mux(x, y, /, mux, muy, sig, amp, offset, pixx, pixy, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         exx = gausfunc(x, mux, sig, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sig, 1, 0, pixy, nsig)
         return amp * exx * exy * (x - mux) / sig**2
     @ufunc()
     def d_muy(x, y, /, mux, muy, sig, amp, offset, pixx, pixy, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         exx = gausfunc(x, mux, sig, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sig, 1, 0, pixy, nsig)
         return amp * exx * exy * (y - muy) / sig**2
     @ufunc()
     def d_sig(x, y, /, mux, muy, sig, amp, offset, pixx, pixy, nsig) :
+        if abs(sig) < 1e-12 :
+            sig = np.float32(1e-12)
         exx = gausfunc(x, mux, sig, 1, 0, pixx, nsig)
         exy = gausfunc(y, muy, sig, 1, 0, pixy, nsig)
         return amp * exx * exy * ((x - mux)**2 + (y - muy)**2) / sig**3
@@ -71,10 +77,10 @@ class IsoGaussian(Function):
     
     @property
     def integ(self) :
-        return self.amp * (2 * np.pi) * self.sig**2
+        return self.amp * (2 * np.pi) * self.sig**2 / self.pix**2
     @integ.setter
-    def integ(self,value) :
-        self.amp = value / np.sqrt(2 * np.pi) / self.sig**2
+    def integ(self, value) :
+        self.amp = value / (2 * np.pi) / self.sig**2 * self.pix**2
     @property
     def proba(self) :
         return np.erf(self.nsig / np.sqrt(2)) **2

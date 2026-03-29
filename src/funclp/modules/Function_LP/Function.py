@@ -45,7 +45,7 @@ class Function(ABC, CudaReference) :
         selfkwargs(self, kwargs)
         for constant in self.constants.keys() :
             if not hasattr(self, constant) :
-                raise SyntaxeError(f'Please define {constant} constant to initialise this function')
+                raise SyntaxError(f'Please define {constant} constant to initialise this function')
 
 
     @abstractmethod
