@@ -131,16 +131,16 @@ class LM(Fit) :
                     continue
                 # --- Forward substitution: L y = -g ---
                 for i in range(nparams):
-                    s = -gradient[model, i, 0]
+                    s = -gradient[model, i]
                     for k in range(i):
-                        s -= hessian[model, i, k] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, i, k] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 # --- Back substitution: Lᵀ x = y ---
                 for i in range(nparams - 1, -1, -1):
-                    s = steps[model, i, 0]
+                    s = steps[model, i]
                     for k in range(i + 1, nparams):
-                        s -= hessian[model, k, i] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, k, i] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
         return func
 
     @prop(cache=True)
@@ -176,18 +176,18 @@ class LM(Fit) :
             # --- Forward substitution: L y = -g ---
             for i in range(nparams):
                 if tid == i:
-                    s = -gradient[model, i, 0]
+                    s = -gradient[model, i]
                     for k in range(i):
-                        s -= hessian[model, i, k] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, i, k] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 nb.cuda.syncthreads()
             # --- Back substitution: Lᵀ x = y ---
             for i in range(nparams - 1, -1, -1):
                 if tid == i:
-                    s = steps[model, i, 0]
+                    s = steps[model, i]
                     for k in range(i + 1, nparams):
-                        s -= hessian[model, k, i] * steps[model, k, 0]
-                    steps[model, i, 0] = s / hessian[model, i, i]
+                        s -= hessian[model, k, i] * steps[model, k]
+                    steps[model, i] = s / hessian[model, i, i]
                 nb.cuda.syncthreads()
         threads_per_block = 64
         blocks_per_grid = self.nmodels
@@ -209,7 +209,7 @@ class LM(Fit) :
             for model in nb.prange(nmodels) :
                 if ignore[model] : continue
                 for param in range(nparams) :
-                    parameters[model, param] += parameter_steps[model, param, 0]
+                    parameters[model, param] += parameter_steps[model, param]
         return func
 
     @prop(cache=True)
@@ -219,7 +219,7 @@ class LM(Fit) :
             nmodels, nparams = parameters.shape
             model, param = nb.cuda.grid(2)
             if model < nmodels and not ignore[model] and param < nparams :
-                parameters[model, param] += parameter_steps[model, param, 0]
+                parameters[model, param] += parameter_steps[model, param]
         threads_per_block = 16, 16
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -260,7 +260,7 @@ class LM(Fit) :
                 else : #Worse
                     if not failed[model] :
                         for param in range(nparams) :
-                            parameters[model, param] -= parameter_steps[model, param, 0]
+                            parameters[model, param] -= parameter_steps[model, param]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up
@@ -285,7 +285,7 @@ class LM(Fit) :
                 else : #Worse
                     if not failed[model] :
                         for param in range(nparams) :
-                            parameters[model, param] -= parameter_steps[model, param, 0]
+                            parameters[model, param] -= parameter_steps[model, param]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up
