@@ -258,9 +258,8 @@ class LM(Fit) :
                     if damping[model] < damping_min :
                         damping[model] = damping_min
                 else : #Worse
-                    if not failed[model] :
-                        for param in range(nparams) :
-                            parameters[model, param] -= parameter_steps[model, param, 0]
+                    for param in range(nparams) :
+                        parameters[model, param] -= parameter_steps[model, param, 0]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up
@@ -283,9 +282,8 @@ class LM(Fit) :
                     if damping[model] < damping_min :
                         damping[model] = damping_min
                 else : #Worse
-                    if not failed[model] :
-                        for param in range(nparams) :
-                            parameters[model, param] -= parameter_steps[model, param, 0]
+                    for param in range(nparams) :
+                        parameters[model, param] -= parameter_steps[model, param, 0]
                     if damping[model] == damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up

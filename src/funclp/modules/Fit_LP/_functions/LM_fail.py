@@ -33,11 +33,11 @@ class LM(Fit) :
         
     def fit_optimize(self) :
 
-        # Reset cache
-        self.hessian_cache[:] = self.hessian_data
-
         # Scale
         self.scale()
+
+        # Reset cache
+        self.hessian_cache[:] = self.hessian_data
 
         # Looping several time on a given hessian with different dampings
         for _ in range(self.max_retries) :
@@ -66,7 +66,7 @@ class LM(Fit) :
 
     def scale(self) :
         scale_function = self.gpu_scale if self.cuda else self.cpu_scale
-        scale_function(self.parameters.T, self.gradient_data, self.hessian_cache, self.parameter_scale, self.improved)
+        scale_function(self.parameters.T, self.gradient_data, self.hessian_data, self.parameter_scale, self.improved)
 
     @prop(cache=True)
     def cpu_scale(self) :
