@@ -23,7 +23,7 @@ def mux(res, *args) -> (None, None) :
     return get_mean(res, args[0])
 def muy(res, *args) -> (None, None) :
     return get_mean(res, args[1])
-def sig(res, *args) -> (1e-6, None) :
+def sig(res, *args) -> (1e-12, None) :
     return np.sqrt(get_std(res, args[0]) * get_std(res, args[1]))
 def amp(res, *args) -> (None, None) :
     return get_amp(res)

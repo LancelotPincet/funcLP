@@ -75,7 +75,12 @@ class Fit(ABC, CudaReference) :
     @property
     def nparameters2fit(self) :
         return len(self.parameters2fit)
-
+    @property
+    def lower_bounds(self) :
+        return self.xp.asarray([getattr(self.function, f'{key}_min') for key in self.parameters2fit])
+    @property
+    def upper_bounds(self) :
+        return self.xp.asarray([getattr(self.function, f'{key}_max') for key in self.parameters2fit])
 
 
     #ABC
@@ -101,6 +106,8 @@ class Fit(ABC, CudaReference) :
         self.jitted = self.function.gpu_function[blocks_per_grid, threads_per_block] if self.cuda else self.function.cpu_function
     
         # Allocate memory
+        self.bounds_min = self.lower_bounds
+        self.bounds_max = self.upper_bounds
         self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints)) # Data to fit
         self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Calculated data from current model
         self.weights = self.xp.asarray(weights) # weights vector
@@ -126,7 +133,7 @@ class Fit(ABC, CudaReference) :
 
             # Reset caches
             self.chi2_cache[:] = self.chi2_data
-            self.xp.greater(self.converged, 0, out=self.improved)
+            self.xp.not_equal(self.converged, 0, out=self.improved)
 
             # Evaluate local model
             self.jacobian()

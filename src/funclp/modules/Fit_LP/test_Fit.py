@@ -65,7 +65,7 @@ def test_function() :
     cf_error_sig = cf_sig - groundtruth_function.sig
     toc = perf_counter()
     print(f'\ncurve_fit took {toc-tic:.3f}s')
-    print(f'curve_fit failed: {np.sum(np.isnan(cf_sig))}/{npoints}')
+    print(f'curve_fit converged: {npoints - np.sum(np.isnan(cf_sig))}/{npoints}')
     print(f'curve_fit Mux error: {np.nanmean(cf_error_mux):.3f} +/- {np.nanstd(cf_error_mux):.3f}')
     print(f'curve_fit Muy error: {np.nanmean(cf_error_muy):.3f} +/- {np.nanstd(cf_error_muy):.3f}')
     print(f'curve_fit Sig error: {np.nanmean(cf_error_sig):.3f} +/- {np.nanstd(cf_error_sig):.3f}')
@@ -82,7 +82,7 @@ def test_function() :
     error_sig = function.sig - groundtruth_function.sig
     toc = perf_counter()
     print(f'\nCPU took {toc-tic:.3f}s')
-    print(f'CPU failed: {np.sum(fit.converged == -1)}/{npoints}')
+    print(f'CPU converged: {np.sum(fit.converged > 0)}/{npoints}')
     print(f'CPU Mux error: {np.mean(error_mux):.3f} +/- {np.std(error_mux):.3f}')
     print(f'CPU Muy error: {np.mean(error_muy):.3f} +/- {np.std(error_muy):.3f}')
     print(f'CPU Sig error: {np.mean(error_sig):.3f} +/- {np.std(error_sig):.3f}')

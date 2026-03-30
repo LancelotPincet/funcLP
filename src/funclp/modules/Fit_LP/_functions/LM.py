@@ -30,6 +30,8 @@ class LM(Fit) :
     def fit_init(self) :
         self.damping_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=self.damping_init)
         self.hessian_cache = self.xp.empty_like(self.hessian_data)
+        self.rho_data = self.xp.zeros(shape=self.nmodels, dtype=self.dtype) # TODO remove just for debug
+        self.nu_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=2.0)
         
     def fit_optimize(self) :
 
@@ -37,7 +39,7 @@ class LM(Fit) :
         self.hessian_cache[:] = self.hessian_data
 
         # Looping several time on a given hessian with different dampings
-        for _ in range(self.max_retries) :
+        for retry in range(self.max_retries) :
             self.failed[:] = self.improved
 
             # Apply damping : H = Hessian + damping * Identity
@@ -54,6 +56,32 @@ class LM(Fit) :
 
             # Checking if improved
             self.improving()
+            
+            # --- TEMP DIAGNOSTICS ---
+            if retry == 0:
+                from corelp import Path
+                path = Path(r'C:\Users\LPINCET\Desktop\modpro_data\acq_tub_600mW_200ms_m100Hz') / 'debug.txt'
+                debug_file = getattr(self, 'debug', None)
+                if debug_file is None :
+                    with open(path, 'w') as f:
+                        f.write('')
+                    self.debug = True
+                lines = [
+                    f"\n--- First retry, iteration diagnostics ---",
+                    f"damping:    {self.damping_data[:5]}",
+                    f"hessian diag[0]: {self.hessian_cache[0].diagonal()}",
+                    f"gradient[0]: {self.gradient_data[0]}",
+                    f"steps[0]:   {self.parameter_steps[0]}",
+                    f"chi2_cache: {self.chi2_cache[:5]}",
+                    f"chi2_new:   {self.chi2_data[:5]}",
+                    f"rho:     {self.rho_data[:5]}",
+                    f"failed:     {self.failed[:5]}",
+                    f"improved:   {self.improved[:5]}",
+                ]
+                with open(path, 'a') as f:
+                    f.write('\n'.join(lines) + '\n')
+                # --- END DIAGNOSTICS ---
+
             if self.improved.all() :
                 break
 
@@ -76,7 +104,7 @@ class LM(Fit) :
                     for paramT in range(nparams) :
                         hessian[model, param, paramT] = hessian_cache[model, param, paramT]
                         if param == paramT :
-                            hessian[model, param, paramT] *= (1+damping[model])
+                            hessian[model, param, param] += damping[model] * max(1e-12, hessian_cache[model, param, param])
         return func
 
     @prop(cache=True)
@@ -88,7 +116,7 @@ class LM(Fit) :
             if model < nmodels and not ignore[model] and param < nparams and paramT < nparams :
                 hessian[model, param, paramT] = hessian_cache[model, param, paramT] 
                 if param == paramT :
-                    hessian[model, param, paramT] *= (1+damping[model])
+                    hessian[model, param, param] += damping[model] * max(1e-12, hessian_cache[model, param, param])
         threads_per_block = 8, 8, 8
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -199,27 +227,37 @@ class LM(Fit) :
 
     def parameter_change(self) :
         change_function = self.gpu_paramchange if self.cuda else self.cpu_paramchange
-        change_function(self.parameters.T, self.parameter_steps, self.failed)
+        change_function(self.parameters.T, self.parameter_steps, self.bounds_min, self.bounds_max, self.failed)
 
     @prop(cache=True)
     def cpu_paramchange(self) :
         @nb.njit(parallel=True)
-        def func(parameters, parameter_steps, ignore) :
+        def func(parameters, parameter_steps, bounds_min, bounds_max, ignore) :
             nmodels, nparams = parameters.shape
             for model in nb.prange(nmodels) :
                 if ignore[model] : continue
                 for param in range(nparams) :
-                    parameters[model, param] += parameter_steps[model, param]
+                    val = parameters[model, param] + parameter_steps[model, param]
+                    if val < bounds_min[param]:
+                        val = bounds_min[param]
+                    elif val > bounds_max[param]:
+                        val = bounds_max[param]
+                    parameters[model, param] = val
         return func
 
     @prop(cache=True)
     def gpu_paramchange(self) :
         @nb.cuda.jit()
-        def func(parameters, parameter_steps, ignore) :
+        def func(parameters, parameter_steps, bounds_min, bounds_max, ignore) :
             nmodels, nparams = parameters.shape
             model, param = nb.cuda.grid(2)
             if model < nmodels and not ignore[model] and param < nparams :
-                parameters[model, param] += parameter_steps[model, param]
+                val = parameters[model, param] + parameter_steps[model, param]
+                if val < bounds_min[param]:
+                    val = bounds_min[param]
+                elif val > bounds_max[param]:
+                    val = bounds_max[param]
+                parameters[model, param] = val
         threads_per_block = 16, 16
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -243,37 +281,61 @@ class LM(Fit) :
 
     def improving(self) :
         improving_function = self.gpu_improve if self.cuda else self.cpu_improve
-        improving_function(self.chi2_cache, self.chi2_data, self.parameters.T, self.parameter_steps, self.damping_data, self.damping_increase, self.damping_decrease, self.damping_max, self.damping_min, self.converged, self.improved, self.failed)
+        improving_function(self.rho_data, self.nu_data, self.chi2_cache, self.chi2_data, self.parameters.T, self.parameter_steps, self.gradient_data, self.hessian_cache, self.damping_data, self.damping_increase, self.damping_decrease, self.damping_max, self.damping_min, self.converged, self.improved, self.failed)
 
     @prop(cache=True)
     def cpu_improve(self) :
         @nb.njit(parallel=True)
-        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
+        def func(rho_data, nu_data, old_chi2, new_chi2, parameters, parameter_steps, gradient, hessian, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
             nmodels, nparams = parameters.shape
             for model in nb.prange(nmodels) :
                 if improved[model] : continue
-                if not failed[model] and old_chi2[model] > new_chi2[model] : #Better
+                # Calculate predicted reducion
+                gtp = 0.0 # g^T p
+                for param in range(nparams):
+                    gtp += gradient[model, param] * parameter_steps[model, param]
+                ptHp = 0.0 # p^T H p
+                for param in range(nparams):
+                    pj = parameter_steps[model, param]
+                    s = 0.0
+                    for paramT in range(nparams):
+                        s += hessian[model, param, paramT] * parameter_steps[model, paramT]
+                    ptHp += pj * s
+                pred = -(gtp + 0.5 * ptHp)
+                # Calculate actual reduction
+                ared = old_chi2[model] - new_chi2[model]
+                # Calculate rho
+                rho = ared / pred if pred > 1e-12 else 0.0
+                rho = min(max(rho, -1e6), 1e6)
+                rho_data[model] = rho
+                # Better
+                if not failed[model] and rho > 1e-4:
                     improved[model] = True
-                    damping[model] *= damping_decrease
-                    if damping[model] < damping_min :
+                    tmp = 1.0 - (2.0 * rho - 1.0)**3
+                    if tmp < 1.0/3.0:
+                        tmp = 1.0/3.0
+                    elif tmp > 10.0:
+                        tmp = 10.0
+                    damping[model] *= tmp
+                    nu_data[model] = 2.0
+                    if damping[model] < damping_min:
                         damping[model] = damping_min
-                else : #Worse
-                    if not failed[model] :
-                        for param in range(nparams) :
+                # Worse
+                else:
+                    if not failed[model]:
+                        for param in range(nparams):
                             parameters[model, param] -= parameter_steps[model, param]
-                    if damping[model] == damping_max:
-                        converged[model] = -1
-                        improved[model] = True # Did not really improve but we give up
-                    else :
-                        damping[model] *= damping_increase
-                        if damping[model] > damping_max :
-                            damping[model] = damping_max
+                        new_chi2[model] = old_chi2[model]
+                    damping[model] *= nu_data[model]
+                    nu_data[model] *= 2.0
+                    if damping[model] > damping_max:
+                        damping[model] = damping_max
         return func
 
     @prop(cache=True)
     def gpu_improve(self) :
         @nb.cuda.jit()
-        def func(old_chi2, new_chi2, parameters, parameter_steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
+        def func(old_chi2, new_chi2, parameters, parameter_steps, gradient, hessian, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
             nmodels, nparams = parameters.shape
             model = nb.cuda.grid(1)
             if model < nmodels and not improved[model] :
@@ -296,4 +358,3 @@ class LM(Fit) :
         threads_per_block = 128
         blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
         return func[blocks_per_grid, threads_per_block]
-
