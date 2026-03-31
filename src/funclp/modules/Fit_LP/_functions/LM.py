@@ -28,19 +28,18 @@ class LM(Fit) :
     # Functions
 
     def fit_init(self) :
-        self.damping_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=self.damping_init)
-        self.hessian_cache = self.xp.empty_like(self.hessian_data)
-        self.rho_data = self.xp.zeros(shape=self.nmodels, dtype=self.dtype) # TODO remove just for debug
-        self.nu_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=2.0)
+        self.damping_data = self.xp.full(shape=self.nmodels, dtype=self.dtype, fill_value=self.damping_init) # Damping data
+        self.improved = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer loop improved --> Stop inner loop
+        self.ignore = self.xp.zeros(shape=self.nmodels, dtype=self.xp.bool_) # Bool vector: True if the inner optimizer failed or improved --> continue to next inner loop
         
     def fit_optimize(self) :
 
-        # Reset cache
-        self.hessian_cache[:] = self.hessian_data
+        # Status
+        self.xp.not_equal(self.converged, 0, out=self.improved) # Global converged are considered already improved in the inner loop
 
         # Looping several time on a given hessian with different dampings
         for retry in range(self.max_retries) :
-            self.failed[:] = self.improved
+            self.ignore[:] = self.improved # If already improved, we ignore from start
 
             # Apply damping : H = Hessian + damping * Identity
             self.damping()
@@ -71,11 +70,10 @@ class LM(Fit) :
                     f"damping:    {self.damping_data[:5]}",
                     f"hessian diag[0]: {self.hessian_cache[0].diagonal()}",
                     f"gradient[0]: {self.gradient_data[0]}",
-                    f"steps[0]:   {self.parameter_steps[0]}",
+                    f"steps[0]:   {self.parameters_steps[0]}",
                     f"chi2_cache: {self.chi2_cache[:5]}",
                     f"chi2_new:   {self.chi2_data[:5]}",
-                    f"rho:     {self.rho_data[:5]}",
-                    f"failed:     {self.failed[:5]}",
+                    f"ignore:     {self.ignore[:5]}",
                     f"improved:   {self.improved[:5]}",
                 ]
                 with open(path, 'a') as f:
@@ -95,28 +93,27 @@ class LM(Fit) :
 
     @prop(cache=True)
     def cpu_damping(self) :
-        @nb.njit(parallel=True)
-        def func(hessian, hessian_cache, damping, ignore) :
+        @nb.njit(parallel=True, cache=True)
+        def func(hessian, hessian_cache, damping, improved) :
             nmodels, nparams, _ = hessian.shape
             for model in nb.prange(nmodels) :
-                if ignore[model] : continue
+                if improved[model] : continue
                 for param in range(nparams) :
                     for paramT in range(nparams) :
                         hessian[model, param, paramT] = hessian_cache[model, param, paramT]
-                        if param == paramT :
-                            hessian[model, param, param] += damping[model] * max(1e-12, hessian_cache[model, param, param])
+                    hessian[model, param, param] += damping[model] * hessian_cache[model, param, param]
         return func
 
     @prop(cache=True)
     def gpu_damping(self) :
         @nb.cuda.jit()
-        def func(hessian, hessian_cache, damping, ignore) :
+        def func(hessian, hessian_cache, damping, improved) :
             nmodels, nparams, _ = hessian.shape
             model, param, paramT = nb.cuda.grid(3)
-            if model < nmodels and not ignore[model] and param < nparams and paramT < nparams :
+            if model < nmodels and not improved[model] and param < nparams and paramT < nparams :
                 hessian[model, param, paramT] = hessian_cache[model, param, paramT] 
                 if param == paramT :
-                    hessian[model, param, param] += damping[model] * max(1e-12, hessian_cache[model, param, param])
+                    hessian[model, param, param] += damping[model] * hessian_cache[model, param, param]
         threads_per_block = 8, 8, 8
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -131,11 +128,11 @@ class LM(Fit) :
 
     def solve(self) :
         solve_function = self.gpu_solve if self.cuda else self.cpu_solve
-        solve_function(self.hessian_data, self.gradient_data, self.parameter_steps, self.failed)
+        solve_function(self.hessian_data, self.gradient_data, self.parameters_steps, self.ignore)
 
     @prop(cache=True)
     def cpu_solve(self) :
-        @nb.njit(parallel=True)
+        @nb.njit(parallel=True, cache=True)
         def func(hessian, gradient, steps, ignore) :
             nmodels, nparams, _ = hessian.shape
             for model in nb.prange(nmodels):
@@ -227,37 +224,41 @@ class LM(Fit) :
 
     def parameter_change(self) :
         change_function = self.gpu_paramchange if self.cuda else self.cpu_paramchange
-        change_function(self.parameters.T, self.parameter_steps, self.bounds_min, self.bounds_max, self.failed)
+        change_function(self.parameters.T, self.parameters_indices, self.parameters_steps, self.bounds_min, self.bounds_max, self.ignore)
 
     @prop(cache=True)
     def cpu_paramchange(self) :
-        @nb.njit(parallel=True)
-        def func(parameters, parameter_steps, bounds_min, bounds_max, ignore) :
-            nmodels, nparams = parameters.shape
+        @nb.njit(parallel=True, cache=True)
+        def func(parameters, indices, steps, bounds_min, bounds_max, ignore) :
+            nmodels, nparams = steps.shape
             for model in nb.prange(nmodels) :
                 if ignore[model] : continue
                 for param in range(nparams) :
-                    val = parameters[model, param] + parameter_steps[model, param]
+                    val = parameters[model, indices[param]] + steps[model, param]
                     if val < bounds_min[param]:
                         val = bounds_min[param]
+                        steps[model, param] = val - parameters[model, indices[param]]
                     elif val > bounds_max[param]:
                         val = bounds_max[param]
-                    parameters[model, param] = val
+                        steps[model, param] = val - parameters[model, indices[param]]
+                    parameters[model, indices[param]] = val
         return func
 
     @prop(cache=True)
     def gpu_paramchange(self) :
         @nb.cuda.jit()
-        def func(parameters, parameter_steps, bounds_min, bounds_max, ignore) :
-            nmodels, nparams = parameters.shape
+        def func(parameters, indices, steps, bounds_min, bounds_max, ignore) :
+            nmodels, nparams = steps.shape
             model, param = nb.cuda.grid(2)
             if model < nmodels and not ignore[model] and param < nparams :
-                val = parameters[model, param] + parameter_steps[model, param]
+                val = parameters[model, indices[param]] + steps[model, param]
                 if val < bounds_min[param]:
                     val = bounds_min[param]
+                    steps[model, param] = val - parameters[model, indices[param]]
                 elif val > bounds_max[param]:
                     val = bounds_max[param]
-                parameters[model, param] = val
+                    steps[model, param] = val - parameters[model, indices[param]]
+                parameters[model, indices[param]] = val
         threads_per_block = 16, 16
         blocks_per_grid = (
             (self.nmodels + threads_per_block[0] - 1) // threads_per_block[0],
@@ -270,10 +271,10 @@ class LM(Fit) :
     # --- Evaluate chi2 ---
 
     def evaluate_chi2(self) :
-        self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.failed)
-        self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.failed)
+        self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.ignore)
+        self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.ignore)
         deviance2chi2_function = self.gpu_deviance2chi2 if self.cuda else self.cpu_deviance2chi2
-        deviance2chi2_function(self.deviance_data, self.chi2_data, self.failed)
+        deviance2chi2_function(self.deviance_data, self.chi2_data, self.ignore)
 
 
 
@@ -281,74 +282,54 @@ class LM(Fit) :
 
     def improving(self) :
         improving_function = self.gpu_improve if self.cuda else self.cpu_improve
-        improving_function(self.rho_data, self.nu_data, self.chi2_cache, self.chi2_data, self.parameters.T, self.parameter_steps, self.gradient_data, self.hessian_cache, self.damping_data, self.damping_increase, self.damping_decrease, self.damping_max, self.damping_min, self.converged, self.improved, self.failed)
+        improving_function(self.chi2_cache, self.chi2_data, self.parameters.T, self.parameters_indices, self.parameters_steps, self.damping_data, self.damping_increase, self.damping_decrease, self.damping_max, self.damping_min, self.converged, self.improved, self.ignore)
 
     @prop(cache=True)
     def cpu_improve(self) :
-        @nb.njit(parallel=True)
-        def func(rho_data, nu_data, old_chi2, new_chi2, parameters, parameter_steps, gradient, hessian, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
-            nmodels, nparams = parameters.shape
+        @nb.njit(parallel=True, cache=True)
+        def func(old_chi2, new_chi2, parameters, indices, steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, ignore) :
+            nmodels, nparams = steps.shape
             for model in nb.prange(nmodels) :
                 if improved[model] : continue
-                # Calculate predicted reducion
-                gtp = 0.0 # g^T p
-                for param in range(nparams):
-                    gtp += gradient[model, param] * parameter_steps[model, param]
-                ptHp = 0.0 # p^T H p
-                for param in range(nparams):
-                    pj = parameter_steps[model, param]
-                    s = 0.0
-                    for paramT in range(nparams):
-                        s += hessian[model, param, paramT] * parameter_steps[model, paramT]
-                    ptHp += pj * s
-                pred = -(gtp + 0.5 * ptHp)
-                # Calculate actual reduction
-                ared = old_chi2[model] - new_chi2[model]
-                # Calculate rho
-                rho = ared / pred if pred > 1e-12 else 0.0
-                rho = min(max(rho, -1e6), 1e6)
-                rho_data[model] = rho
                 # Better
-                if not failed[model] and rho > 1e-4:
+                if not ignore[model] and old_chi2[model] > new_chi2[model] :
                     improved[model] = True
-                    tmp = 1.0 - (2.0 * rho - 1.0)**3
-                    if tmp < 1.0/3.0:
-                        tmp = 1.0/3.0
-                    elif tmp > 10.0:
-                        tmp = 10.0
-                    damping[model] *= tmp
-                    nu_data[model] = 2.0
-                    if damping[model] < damping_min:
+                    damping[model] *= damping_decrease
+                    if damping[model] < damping_min :
                         damping[model] = damping_min
-                # Worse
-                else:
-                    if not failed[model]:
-                        for param in range(nparams):
-                            parameters[model, param] -= parameter_steps[model, param]
-                        new_chi2[model] = old_chi2[model]
-                    damping[model] *= nu_data[model]
-                    nu_data[model] *= 2.0
-                    if damping[model] > damping_max:
-                        damping[model] = damping_max
+                # Worse or failed
+                else :
+                    if not ignore[model] :
+                        for param in range(nparams) :
+                            parameters[model, indices[param]] -= steps[model, param]
+                        #new_chi2[model] = old_chi2[model]
+                    if damping[model] >= damping_max:
+                        converged[model] = -1
+                        improved[model] = True # Did not really improve but we give up
+                    else :
+                        damping[model] *= damping_increase
+                        if damping[model] > damping_max :
+                            damping[model] = damping_max
         return func
 
     @prop(cache=True)
     def gpu_improve(self) :
         @nb.cuda.jit()
-        def func(old_chi2, new_chi2, parameters, parameter_steps, gradient, hessian, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, failed) :
-            nmodels, nparams = parameters.shape
+        def func(old_chi2, new_chi2, parameters, indices, steps, damping, damping_increase, damping_decrease, damping_max, damping_min, converged, improved, ignore) :
+            nmodels, nparams = steps.shape
             model = nb.cuda.grid(1)
             if model < nmodels and not improved[model] :
-                if not failed[model] and old_chi2[model] > new_chi2[model] : #Better
+                if not ignore[model] and old_chi2[model] > new_chi2[model] : #Better
                     improved[model] = True
                     damping[model] *= damping_decrease
                     if damping[model] < damping_min :
                         damping[model] = damping_min
                 else : #Worse
-                    if not failed[model] :
+                    if not ignore[model] :
                         for param in range(nparams) :
-                            parameters[model, param] -= parameter_steps[model, param]
-                    if damping[model] == damping_max:
+                            parameters[model, param] -= steps[model, param]
+                        new_chi2[model] = old_chi2[model]
+                    if damping[model] >= damping_max:
                         converged[model] = -1
                         improved[model] = True # Did not really improve but we give up
                     else :

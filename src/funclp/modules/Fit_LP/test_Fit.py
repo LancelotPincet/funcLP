@@ -74,6 +74,8 @@ def test_function() :
     # Making Fit
     tic = perf_counter()
     function = IsoGaussian(sig=np.full(npoints, 0.21*670/1.5), pix=100, integ=N)
+    function.amp_fit = False
+    function.offset_fit = False
     estimator = MLE(Poisson())
     fit = LM(function, estimator)
     fit(data, X, Y)
