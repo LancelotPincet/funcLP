@@ -291,32 +291,20 @@ class Fit(ABC, CudaReference) :
     def gpu_fisher2hessian(jacobian, fisher, hessian, ignore):
         model = nb.cuda.blockIdx.x
         tid   = nb.cuda.threadIdx.x
-        nt    = nb.cuda.blockDim.x
+        nparams = jacobian.shape[2]
+        npoints = jacobian.shape[1]
+
         if ignore[model]:
             return
-        npoints = jacobian.shape[1]
-        nparams = jacobian.shape[2]
-        H = nb.cuda.shared.array((64, 64), nb.float32)
-        # init
-        for j in range(tid, nparams, nt):
-            for k in range(j, nparams):
-                H[j, k] = 0.0
-        nb.cuda.syncthreads()
-        # accumulation (each j owned by one thread)
-        for i in range(tid, npoints, nt):
-            fi = fisher[model, i]
-            for j in range(tid, nparams, nt):
-                Jij = jacobian[model, i, j]
-                vj  = Jij * fi
-                for k in range(j, nparams):
-                    H[j, k] += vj * jacobian[model, i, k]
-        nb.cuda.syncthreads()
-        # write back
-        for j in range(tid, nparams, nt):
-            for k in range(j, nparams):
-                v = H[j, k]
-                hessian[model, j, k] = v
-                hessian[model, k, j] = v
+
+        npairs = nparams * nparams
+        if tid < npairs:
+            j = tid // nparams
+            k = tid % nparams
+            s = 0.0
+            for i in range(npoints):
+                s += jacobian[model, i, j] * jacobian[model, i, k] * fisher[model, i]
+            hessian[model, j, k] = s
     
     @prop(cache=True)
     def fisher2hessian(self) :

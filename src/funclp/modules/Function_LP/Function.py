@@ -17,6 +17,7 @@ from corelp import prop, selfkwargs
 from funclp import CudaReference
 from abc import ABC, abstractmethod
 import numpy as np
+import math
 import inspect
 import importlib
 from pathlib import Path
@@ -134,19 +135,20 @@ class Function(ABC, CudaReference) :
                 string = f'''
 from ._{classname}_cpukernel_function import _{classname}_cpukernel_function as kernel
 from funclp import ufunc
-import numpy as np
+import math
 @ufunc(data={main_ufunc.variable2data}, constants={main_ufunc.variable2constants}, fastmath=False)
-def {dname}({main_ufunc.d_inputs}, eps=1e-4):
+def {dname}({main_ufunc.d_inputs}):
+    eps = 1e-4
     f_plus = kernel({inputs_plus})
     f_minus = kernel({inputs_minus})
-    if np.isfinite(f_plus) and np.isfinite(f_minus):
+    if math.isfinite(f_plus) and math.isfinite(f_minus):
         return (f_plus - f_minus) / (2.0 * eps)
     f_x = kernel({main_ufunc.inputs})
-    if np.isfinite(f_plus) and np.isfinite(f_x):
+    if math.isfinite(f_plus) and math.isfinite(f_x):
         return (f_plus - f_x) / eps
-    if np.isfinite(f_minus) and np.isfinite(f_x):
+    if math.isfinite(f_minus) and math.isfinite(f_x):
         return (f_x - f_minus) / eps
-    return np.nan
+    return math.nan
 '''
                 if not file.exists() or file.read_text() != string:
                     file.write_text(string)
