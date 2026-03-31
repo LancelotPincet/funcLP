@@ -29,7 +29,7 @@ def m2(res, *args) -> (1, None) :
 
 class GaussianBeam(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(z, /, w0:w0=10., z0:z0=0., m2:m2=1., wl=550., n=1.) : # w0 : µm, z0 : mm, wl : nm
         return w0 * math.sqrt(1 + ((z - z0) / (math.pi * w0**2 * n / wl / m2))**2)
     

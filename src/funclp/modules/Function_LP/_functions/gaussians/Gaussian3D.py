@@ -40,7 +40,7 @@ def offset(res, *vars) -> (None, None) :
 
 class Gaussian3D(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, y, z, /, mux:mux=0., muy:muy=0., muz:muz=0., sigx:sigx=1/(2*np.pi)**(3/2), sigy:sigy=1/(2*np.pi)**(3/2), sigz:sigz=1/(2*np.pi)**(3/2), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., pixz=-1., nsig=-1., theta=0., phi=0.) :
         x, y, z, mux, muy, muz = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
         return amp * gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) * gausfunc(z, muz, sigz, 1, 0, pixz, nsig) + offset

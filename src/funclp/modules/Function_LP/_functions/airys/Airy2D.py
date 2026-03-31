@@ -32,7 +32,7 @@ def offset(res, *args) -> (None, None) :
 
 class Airy2D(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, y, /, mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., wl=550., NA=1.5, tol=1.) :
         r = math.sqrt((x - mux)**2 + (y - muy)**2)
         if r < tol :

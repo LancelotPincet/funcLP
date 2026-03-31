@@ -78,7 +78,7 @@ def make_calculation(function, name, args, kwargs, out=None, ignore=False) :
         raise ValueError(f'Out shape {out.shape} is does not correspond to expected {out_shape}')
 
     # Arrays
-    constants = [xp.asarray(arr) for arr in function.constants.values()]
+    constants = [xp.asarray(getattr(function, arr)) for arr in ufunc.constants]
 
     # Function jitted
     jitted = getattr(function, f'gpu_{name}')[blocks_per_grid, threads_per_block] if cuda else getattr(function, f'cpu_{name}')

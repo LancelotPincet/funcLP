@@ -32,7 +32,7 @@ def e(res, *args) -> (None, None) :
 
 class Polynomial4(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, /, a:a=1., b:b=0., c:c=0., d:d=0., e:e=0.) :
         return a * x**4 + b * x**3 + c * x**2 + d * x + e
     

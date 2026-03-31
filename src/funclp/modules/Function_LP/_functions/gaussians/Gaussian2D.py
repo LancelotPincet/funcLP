@@ -36,7 +36,7 @@ def offset(res, *vars) -> (None, None) :
 
 class Gaussian2D(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, y, /, mux:mux=0., muy:muy=0., sigx:sigx=1/(2*np.pi), sigy:sigy=1/(2*np.pi), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., nsig=-1., theta=0.) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
         return amp * gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) + offset

@@ -30,7 +30,7 @@ def offset(res, *args) -> (None, None) :
 
 class Exponential1(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(t, /, tau:tau=1., amp:amp=1., offset:offset=0.) :
         return amp * math.exp(-t / tau) + offset
     

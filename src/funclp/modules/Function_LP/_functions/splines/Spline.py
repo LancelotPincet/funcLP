@@ -53,7 +53,7 @@ class Spline(Function):
 
         super().__init__(k=k, t=t, coeffs=coeffs)
 
-    @ufunc(main=True, constants=["t", "coeffs"])
+    @ufunc(constants=["t", "coeffs"])
     def function(x, /, mu:mu=0., amp:amp=1., offset:offset=0., k=3, t=None, coeffs=None) :
         return amp * bspline1d(t, coeffs, k, x-mu) + offset
     

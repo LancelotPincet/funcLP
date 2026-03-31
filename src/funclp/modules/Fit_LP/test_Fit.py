@@ -34,7 +34,7 @@ def test_function() :
     # Making coordinates
     v = np.linspace(-500, 500, 11)
     X, Y = np.meshgrid(v, v)
-    npoints = 20
+    npoints = 1000
     
     # Making experimental data
     sigma = 0.21*670/1.5 * np.random.normal(1, 0.1, npoints) #nm

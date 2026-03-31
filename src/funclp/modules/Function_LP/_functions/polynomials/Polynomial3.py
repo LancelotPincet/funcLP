@@ -30,7 +30,7 @@ def d(res, *args) -> (None, None) :
 
 class Polynomial3(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, /, a:a=1., b:b=0., c:c=0., d:d=0.) :
         return a * x**3 + b * x**2 + c * x + d
     

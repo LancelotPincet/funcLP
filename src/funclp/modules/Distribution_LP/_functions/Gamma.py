@@ -17,7 +17,7 @@ import math
 
 class Gamma(Distribution) :
 
-    @ufunc(main=True, data=['raw_data', 'model_data'])
+    @ufunc(data=['raw_data', 'model_data'])
     def pdf(raw_data, model_data, /, k=np.float32(1.), eps=np.float32(1e-6), weights=np.float32(1.)):
         """Probability Density Function."""
         if raw_data < 0 :

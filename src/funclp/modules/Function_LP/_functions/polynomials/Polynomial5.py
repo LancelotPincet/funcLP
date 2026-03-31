@@ -34,7 +34,7 @@ def f(res, *args) -> (None, None) :
 
 class Polynomial5(Function):
 
-    @ufunc(main=True)
+    @ufunc()
     def function(x, /, a:a=1., b:b=0., c:c=0., d:d=0., e:e=0., f:f=0.) :
         return a * x**5 + b * x**4 + c * x**3 + d * x**2 + e * x + f
     

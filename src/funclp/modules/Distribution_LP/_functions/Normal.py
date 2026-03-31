@@ -17,7 +17,7 @@ import math
 
 class Normal(Distribution) :
 
-    @ufunc(main=True, data=['raw_data', 'model_data'])
+    @ufunc(data=['raw_data', 'model_data'])
     def pdf(raw_data, model_data, /, sigma=np.float32(1), weights=np.float32(1.)):
         """Probability Density Function."""
         mu, sig2 = model_data, sigma**2

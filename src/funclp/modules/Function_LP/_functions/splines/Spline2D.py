@@ -62,7 +62,7 @@ class Spline2D(Function):
 
         super().__init__(**kwargs)
 
-    @ufunc(main=True, constants=["tx", "ty", "coeffs"])
+    @ufunc(constants=["tx", "ty", "coeffs"])
     def function(x, y, /, mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., kx=3, ky=3, tx=None, ty=None, coeffs=None) :
         return amp * bspline2d(tx, ty, coeffs, kx, ky, x-mux, y-muy) + offset
     

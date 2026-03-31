@@ -86,7 +86,7 @@ class Spline3D(Function):
 
         super().__init__(kx=kx, ky=ky, kz=kz, tx=tx, ty=ty, tz=tz, coeffs=coeffs)
 
-    @ufunc(main=True, constants=["tx", "ty", "tz", "coeffs"])
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
     def function(x, y, z, /, mux:mux=0., muy:muy=0., muz:muz=0., amp:amp=1., offset:offset=0., kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None) :
         return amp * bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x-mux, y-muy, z-muz) + offset
     

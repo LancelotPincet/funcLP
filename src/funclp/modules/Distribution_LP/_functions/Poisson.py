@@ -17,7 +17,7 @@ import math
 
 class Poisson(Distribution) :
 
-    @ufunc(main=True, data=['raw_data', 'model_data'])
+    @ufunc(data=['raw_data', 'model_data'])
     def pdf(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
         """Probability Density Function."""
         lam = eps if model_data < eps else model_data
