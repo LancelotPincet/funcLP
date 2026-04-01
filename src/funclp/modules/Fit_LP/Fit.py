@@ -142,20 +142,13 @@ class Fit(ABC, CudaReference) :
         # Initialize
         self.fit_init()
 
-        from time import perf_counter
-        timeit = 0
-
         # Iterations
         for _ in range(self.max_iterations) :
 
             # Chi2
             if self.cuda :
-                tic = perf_counter()
                 self.gpu_assembly[self.nmodels, 128](self.raw_data, *self.variables, *self.data, *self.parameters, *self.constants, self.weights, self.chi2_data, self.gradient_data, self.hessian_data, self.parameters_bools, self.converged)
-                toc = perf_counter()
-                timeit += toc-tic
             else :
-                tic = perf_counter()
                 self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.converged)
                 self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.converged)
                 self.deviance2chi2(self.deviance_data, self.chi2_data, self.converged)
@@ -170,8 +163,6 @@ class Fit(ABC, CudaReference) :
                 # Hessian
                 self.estimator.fisher(self.raw_data, self.model_data, weights=self.weights, out=self.fisher_data, ignore=self.converged)
                 self.fisher2hessian(self.jacobian_data, self.fisher_data, self.hessian_data, self.converged)
-                toc = perf_counter()
-                timeit += toc-tic
 
             # Reset caches
             self.hessian_cache[:] = self.hessian_data
@@ -186,7 +177,6 @@ class Fit(ABC, CudaReference) :
                 break
 
         # End
-        print(timeit)
         if transfer_back :
             self.parameters = [self.xp.asnumpy(param) for param in self.parameters]
             self.converged = self.xp.asnumpy(self.converged)

@@ -38,7 +38,7 @@ def test_function() :
     # Making coordinates
     v = np.linspace(-500, 500, 11)
     X, Y = np.meshgrid(v, v)
-    npoints = 10000
+    npoints = 100000
     
     # Making experimental data
     sigma = 0.21*670/1.5 * np.random.normal(1, 0.1, npoints) #nm
@@ -48,6 +48,8 @@ def test_function() :
     groundtruth_function = IsoGaussian(sig=sigma, mux=mux, muy=muy, pix=100, integ=N)
     data = groundtruth_function(X, Y)
     data = np.random.poisson(data)
+
+
 
     # Making curve_fit fit as reference
     if npoints <= 1000 :
@@ -76,6 +78,7 @@ def test_function() :
         print(f'curve_fit Sig error: {np.nanmean(cf_error_sig):.3f} +/- {np.nanstd(cf_error_sig):.3f}')
     
 
+
     # Making Fit
     function = IsoGaussian(cuda=False, sig=np.full(npoints, 0.21*670/1.5), pix=100, integ=N)
     function.amp_fit = False
@@ -94,6 +97,8 @@ def test_function() :
     print(f'CPU Mux error: {np.mean(error_mux):.3f} +/- {np.std(error_mux):.3f}')
     print(f'CPU Muy error: {np.mean(error_muy):.3f} +/- {np.std(error_muy):.3f}')
     print(f'CPU Sig error: {np.mean(error_sig):.3f} +/- {np.std(error_sig):.3f}')
+
+
 
     # Making Fit (GPU)
     if cp is not None :

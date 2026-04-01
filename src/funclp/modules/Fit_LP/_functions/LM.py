@@ -42,15 +42,19 @@ class LM(Fit) :
         for _ in range(self.max_retries) :
             self.ignore[:] = self.improved # If already improved, we ignore from start
 
-            # Apply damping : H = Hessian + damping * Identity
-            self.damping(self.hessian_data, self.hessian_cache, self.damping_data, self.damping_min, self.damping_max, self.damping_tau, self.damping_initialized, self.improved)
-            if not self.damping_initialized : self.damping_initialized = True
+            if self.cuda :
+                self.gpu_damped_step[self.nmodels, 32](self.hessian_data, self.hessian_cache, self.gradient_data, self.damping_data, self.damping_min, self.damping_max, self.damping_tau, self.damping_initialized, self.parameters.T, self.parameters_indices, self.parameters_steps, self.bounds_min, self.bounds_max, self.ignore)
+                if not self.damping_initialized : self.damping_initialized = True
+            else :
+                # Apply damping : H = Hessian + damping * Identity
+                self.damping(self.hessian_data, self.hessian_cache, self.damping_data, self.damping_min, self.damping_max, self.damping_tau, self.damping_initialized, self.improved)
+                if not self.damping_initialized : self.damping_initialized = True
 
-            # Solve function
-            self.solve(self.hessian_data, self.gradient_data, self.parameters_steps, self.ignore)
+                # Solve function
+                self.solve(self.hessian_data, self.gradient_data, self.parameters_steps, self.ignore)
 
-            # Apply steps
-            self.paramchange(self.parameters.T, self.parameters_indices, self.parameters_steps, self.bounds_min, self.bounds_max, self.ignore)
+                # Apply steps
+                self.paramchange(self.parameters.T, self.parameters_indices, self.parameters_steps, self.bounds_min, self.bounds_max, self.ignore)
 
             # evaluate chi2 after step
             self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.ignore)
@@ -62,6 +66,93 @@ class LM(Fit) :
             if self.improved.all() :
                 break
         self.converged[~self.improved] = -3
+
+
+
+    @staticmethod
+    @nb.cuda.jit(cache=True)
+    def gpu_damped_step(hessian, hessian_cache, gradient, damping, damping_min, damping_max, tau, initialized, parameters, indices, steps, bounds_min, bounds_max, ignore):
+        model = nb.cuda.blockIdx.x
+        tid = nb.cuda.threadIdx.x
+
+        nmodels, nparams, _ = hessian.shape
+        if model >= nmodels or ignore[model] or tid >= nparams : return
+
+        # DAMPING
+
+        # Initialize damping once per model if needed
+        if not initialized and tid == 0:
+            m = 0.0
+            for p in range(nparams) :
+                v = max(1e-12, abs(hessian_cache[model, p, p]))
+                if v > m : m = v
+            damping[model] = min(max(tau * m, damping_min), damping_max)
+        nb.cuda.syncthreads()
+
+        # Build damped Hessian: H = H0 + lambda * diag(H0)
+        for j in range(nparams): # Each thread copies one row
+            hessian[model, tid, j] = hessian_cache[model, tid, j]
+        hessian[model, tid, tid] += damping[model] * max(1e-12, abs(hessian_cache[model, tid, tid]))
+        nb.cuda.syncthreads()
+
+        # CHOLESKY SOLVE
+
+        # Lower-triangular part stores L
+        for i in range(nparams): 
+            if tid == i:
+                s = hessian[model, i, i]
+                for k in range(i):
+                    v = hessian[model, i, k]
+                    s -=  v * v
+                if s <= 0.0:
+                    ignore[model] = True
+                else:
+                    hessian[model, i, i] = math.sqrt(s)
+            nb.cuda.syncthreads()
+
+            if ignore[model]: return
+
+            if tid > i:
+                s = hessian[model, tid, i]
+                for k in range(i):
+                    s -= hessian[model, tid, k] * hessian[model, i, k]
+                hessian[model, tid, i] = s / hessian[model, i, i]
+            nb.cuda.syncthreads()
+
+        # Forward substitution: L y = -g
+        for i in range(nparams): # reuse steps as temporary y
+            if tid == i:
+                s = -gradient[model, i]
+                for k in range(i):
+                    s -= hessian[model, i, k] * steps[model, k]
+                steps[model, i] = s / hessian[model, i, i]
+            nb.cuda.syncthreads()
+
+        # Back substitution: L^T x = y
+        for i in range(nparams - 1, -1, -1):
+            if tid == i:
+                s = steps[model, i]
+                for k in range(i + 1, nparams):
+                    s -= hessian[model, k, i] * steps[model, k]
+                steps[model, i] = s / hessian[model, i, i]
+            nb.cuda.syncthreads()
+
+        # PARAM CHANGE
+
+        # Apply bounded parameter update
+        pidx = indices[tid]
+        oldv = parameters[model, pidx]
+        newv = oldv + steps[model, tid]
+        if newv < bounds_min[tid]:
+            newv = bounds_min[tid]
+            steps[model, tid] = newv - oldv
+        elif newv > bounds_max[tid]:
+            newv = bounds_max[tid]
+            steps[model, tid] = newv - oldv
+        parameters[model, pidx] = newv
+
+
+
 
 
 
