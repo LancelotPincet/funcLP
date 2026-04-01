@@ -52,7 +52,6 @@ class Fit(ABC, CudaReference) :
         self.cuda_reference = self.function
         self.estimator.cuda_reference = self.function
         selfkwargs(self, kwargs)
-        if self.cuda: self.gpu_assembly
         
 
     # Function and estimator
@@ -124,16 +123,11 @@ class Fit(ABC, CudaReference) :
 
       # Allocate memory
         self.raw_data = self.xp.asarray(raw_data).reshape((self.nmodels, self.npoints)) # Data to fit
-        self.model_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Calculated data from current model
         self.weights = weights if weights.size > 1 else self.xp.full(shape=(self.nmodels, self.npoints), fill_value=weights) # weights vector
         self.parameters_steps = self.xp.empty(shape=(self.nmodels, self.nparameters2fit), dtype=self.dtype) # Step to apply on each parameter
-        self.jacobian_data = self.xp.empty(shape=(self.nmodels, self.npoints, self.nparameters2fit), dtype=self.dtype) # Jacobian matrix
-        self.deviance_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Deviance matrix to calculate chi2
         self.chi2_data = self.xp.empty(shape=self.nmodels, dtype=self.dtype) # chi2 current vector
         self.chi2_cache = self.xp.empty_like(self.chi2_data) # chi2 reference vector to define improvement
-        self.loss_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # Loss matrix to calculate gradient
         self.gradient_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit), dtype=self.dtype) # gradient matrix
-        self.fisher_data = self.xp.empty(shape=(self.nmodels, self.npoints), dtype=self.dtype) # fisher matrix to calculate hessian
         self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype) # hessian matrix
         self.hessian_cache = self.xp.empty_like(self.hessian_data) # hessian cache
         self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.int8) # -3: optimization fail, -2: optimization terminated and failed, -1: optimization termination to test, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
@@ -145,24 +139,8 @@ class Fit(ABC, CudaReference) :
         # Iterations
         for _ in range(self.max_iterations) :
 
-            # Chi2
-            if self.cuda :
-                self.gpu_assembly[self.nmodels, 128](self.raw_data, *self.variables, *self.data, *self.parameters, *self.constants, self.weights, self.chi2_data, self.gradient_data, self.hessian_data, self.parameters_bools, self.converged)
-            else :
-                self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.converged)
-                self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.converged)
-                self.deviance2chi2(self.deviance_data, self.chi2_data, self.converged)
-
-                # Jacobian
-                self.jacobian(*self.variables, *self.data, *self.parameters, *self.constants, self.jacobian_data, self.parameters_bools, self.converged)
-
-                # Gradient
-                self.estimator.loss(self.raw_data, self.model_data, weights=self.weights, out=self.loss_data, ignore=self.converged)
-                self.loss2gradient(self.jacobian_data, self.loss_data, self.gradient_data, self.converged)
-
-                # Hessian
-                self.estimator.fisher(self.raw_data, self.model_data, weights=self.weights, out=self.fisher_data, ignore=self.converged)
-                self.fisher2hessian(self.jacobian_data, self.fisher_data, self.hessian_data, self.converged)
+            # chi2, gradient, hessian
+            self.assembly(self.raw_data, *self.variables, *self.data, *self.parameters, *self.constants, self.weights, self.chi2_data, self.gradient_data, self.hessian_data, self.parameters_bools, self.converged)
 
             # Reset caches
             self.hessian_cache[:] = self.hessian_data
@@ -184,6 +162,87 @@ class Fit(ABC, CudaReference) :
         self.cuda = cache_cuda
         self.function.parameters = {key: self.parameters[pos] if getattr(self.function, f'{key}_fit') else self.function.parameters[key] for pos, key in enumerate(self.function.parameters.keys())}
         return {key: self.function.parameters[key] for key in self.parameters2fit}
+
+
+
+    # chi2, gradient, hessian
+
+    @prop(cache=True)
+    def cpu_assembly(self):
+        variables = [key for key in self.function.variables]
+        data = [key for key in self.function.data]
+        parameters = [key for key in self.function.parameters.keys()]
+        constants = [key for key in self.function.constants]
+        inputs = ', '.join(variables + data + parameters + constants)
+        inputs_scalar = ', '.join([f'point_{key}' for key in variables] + [f'point_{key}' for key in data] + [f'model_{key}' for key in parameters] + constants)
+        point_variables = '\n            '.join([f'point_{key} = {key}[point]' for key in variables])
+        point_data = '\n            '.join([f'point_{key} = {key}[model, point]' for key in data])
+        model_params = '\n        '.join([f'model_{key} = {key}[model]' for key in parameters])
+        derivatives = '\n'.join([f'''            if bool2fit[{pos}]: \n                jacob_local[count] = d_{key}({inputs_scalar})\n                count += 1''' for pos, key in enumerate(parameters)])
+        string = f'''
+@nb.njit(parallel=True, nogil=True, fastmath=True)
+def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore):
+    nmodels, npoints = raw_data.shape
+    nparams = gradient.shape[1]
+
+    for model in nb.prange(nmodels):
+        if ignore[model]:
+            continue
+
+        chi_local = nb.float32(0.0)
+        grad_local = np.zeros(MAX_PARAMS, dtype=np.float32)
+        hess_local = np.zeros(NHESS, dtype=np.float32)
+        jacob_local = np.empty(MAX_PARAMS, dtype=np.float32)
+
+        # Load model parameters once
+        {model_params}
+
+        for point in range(npoints):
+            {point_variables}
+            {point_data}
+            point_raw_data = raw_data[model, point]
+            point_weight = weights[model, point]
+
+            # Scalar model + estimator pieces
+            mod = model_scalar({inputs_scalar})
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+
+            chi_local += dev
+
+            # Active jacobian
+            count = 0
+{derivatives}
+
+            # Gradient + packed upper Hessian
+            for p in range(nparams):
+                Jp = jacob_local[p]
+                grad_local[p] += Jp * los
+                for q in range(p, nparams):
+                    idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
+                    hess_local[idx] += Jp * jacob_local[q] * fis
+
+        # Write outputs
+        chi2[model] = chi_local
+
+        for p in range(nparams):
+            gradient[model, p] = grad_local[p]
+
+        for p in range(nparams):
+            for q in range(p, nparams):
+                idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
+                v = hess_local[idx]
+                hessian[model, p, q] = v
+                hessian[model, q, p] = v
+    '''
+
+        glob = {'nb': nb, 'np': np, 'MAX_PARAMS': 8, 'NHESS': int(8 * (8 + 1) // 2), 'model_scalar': self.function.cpukernel_function, 'deviance_scalar': self.estimator.cpukernel_deviance, 'loss_scalar': self.estimator.cpukernel_loss, 'fisher_scalar': self.estimator.cpukernel_fisher}
+        for key in parameters:
+            glob[f'd_{key}'] = getattr(self.function, f'cpukernel_d_{key}')
+        loc = {}
+        exec(string, glob, loc)
+        return loc['func']
 
 
 
@@ -234,10 +293,10 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
         thread_weight = weights[model, point]
 
         # Calculate scalar values
-        pred = model_scalar({inputs_threads})
-        dev = deviance_scalar(thread_raw_data, pred, thread_weight)
-        los = loss_scalar(thread_raw_data, pred, thread_weight)
-        fis = fisher_scalar(thread_raw_data, pred, thread_weight)
+        mod = model_scalar({inputs_threads})
+        dev = deviance_scalar(thread_raw_data, mod, thread_weight)
+        los = loss_scalar(thread_raw_data, mod, thread_weight)
+        fis = fisher_scalar(thread_raw_data, mod, thread_weight)
         chi_local += dev
 
         # Build active jacobian vector
@@ -307,139 +366,12 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
 
 
 
-    # --- Chi² ---
-
-    @staticmethod
-    @nb.njit(parallel=True, cache=True)
-    def cpu_deviance2chi2(deviance, chi2, ignore) :
-        nmodels, npoints = deviance.shape
-        for model in nb.prange(nmodels) :
-            if ignore[model] : continue
-            s = 0.0
-            for point in range(npoints) :
-                s += deviance[model, point]
-            chi2[model] = s
-
-    @staticmethod
-    @nb.cuda.jit(cache=True)
-    def gpu_deviance2chi2(deviance, chi2, ignore) :
-        model = nb.cuda.blockIdx.x
-        tid = nb.cuda.threadIdx.x
-        if ignore[model]:
-            return
-        npoints = deviance.shape[1]
-        smem = nb.cuda.shared.array(256, dtype=nb.float32)
-        s = 0.0
-        for i in range(tid, npoints, nb.cuda.blockDim.x):
-            s += deviance[model, i]
-        smem[tid] = s
-        nb.cuda.syncthreads()
-        # reduction
-        stride = nb.cuda.blockDim.x // 2
-        while stride > 0:
-            if tid < stride:
-                smem[tid] += smem[tid + stride]
-            nb.cuda.syncthreads()
-            stride //= 2
-        if tid == 0:
-            chi2[model] = smem[0]
-
-    @prop(cache=True)
-    def deviance2chi2(self) :
-        if not self.cuda : return self.cpu_deviance2chi2
-        threads_per_block = 256
+    @property
+    def assembly(self) :
+        if not self.cuda : return self.cpu_assembly
         blocks_per_grid = self.nmodels
-        return self.gpu_deviance2chi2[blocks_per_grid, threads_per_block]
-
-
-
-    # --- Gradient ---
-
-    @staticmethod
-    @nb.njit(parallel=True, cache=True)
-    def cpu_loss2gradient(jacobian, loss, gradient, ignore) :
-        nmodels, npoints, nparams = jacobian.shape
-        for model in nb.prange(nmodels) :
-            if ignore[model] : continue
-            for param in range(nparams) :
-                s = 0.0
-                for point in range(npoints) :
-                    s += jacobian[model, point, param] * loss[model, point]
-                gradient[model, param] = s
-
-    @staticmethod
-    @nb.cuda.jit(cache=True)
-    def gpu_loss2gradient(jacobian, loss, gradient, ignore) :
-        model = nb.cuda.blockIdx.x
-        tid = nb.cuda.threadIdx.x
-        if ignore[model] :
-            return
-        npoints = jacobian.shape[1]
-        nparams  = jacobian.shape[2]
-        g = nb.cuda.shared.array((64,), nb.float32)
-        # init
-        for j in range(tid, nparams, nb.cuda.blockDim.x):
-            g[j] = 0.0
-        nb.cuda.syncthreads()
-        # accumulate
-        for i in range(tid, npoints, nb.cuda.blockDim.x):
-            li = loss[model, i]
-            for j in range(nparams):
-                nb.cuda.atomic.add(g, j, jacobian[model, i, j] * li)
-        nb.cuda.syncthreads()
-        # write back
-        for j in range(tid, nparams, nb.cuda.blockDim.x):
-            gradient[model, j] = g[j]
-    
-    @prop(cache=True)
-    def loss2gradient(self) :
-        if not self.cuda : return self.cpu_loss2gradient
-        threads_per_block = 256
-        blocks_per_grid = self.nmodels
-        return self.gpu_loss2gradient[blocks_per_grid, threads_per_block]
-
-
-    # --- Hessian ---
-
-    @staticmethod
-    @nb.njit(parallel=True, cache=True)
-    def cpu_fisher2hessian(jacobian, fisher, hessian, ignore) :
-        nmodels, npoints, nparams = jacobian.shape
-        for model in nb.prange(nmodels) :
-            if ignore[model] : continue
-            for param in range(nparams) :
-                for paramT in range(nparams) :
-                    s = 0.0
-                    for point in range(npoints) :
-                        s += jacobian[model, point, param] * jacobian[model, point, paramT] * fisher[model, point]
-                    hessian[model, param, paramT] = s
-
-    @staticmethod
-    @nb.cuda.jit(cache=True)
-    def gpu_fisher2hessian(jacobian, fisher, hessian, ignore):
-        model = nb.cuda.blockIdx.x
-        tid   = nb.cuda.threadIdx.x
-        nparams = jacobian.shape[2]
-        npoints = jacobian.shape[1]
-
-        if ignore[model]:
-            return
-
-        npairs = nparams * nparams
-        if tid < npairs:
-            j = tid // nparams
-            k = tid % nparams
-            s = 0.0
-            for i in range(npoints):
-                s += jacobian[model, i, j] * jacobian[model, i, k] * fisher[model, i]
-            hessian[model, j, k] = s
-    
-    @prop(cache=True)
-    def fisher2hessian(self) :
-        if not self.cuda : return self.cpu_fisher2hessian
-        threads_per_block = 256
-        blocks_per_grid = self.nmodels
-        return self.gpu_fisher2hessian[blocks_per_grid, threads_per_block]
+        threads_per_block = 128
+        return self.gpu_assembly[blocks_per_grid, threads_per_block]
 
 
 
@@ -481,6 +413,8 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
             if converged[model] == -1 :
                 converged[model] = -2
 
+
+
     @staticmethod
     @nb.cuda.jit(cache=True)
     def gpu_convergence(ftol, old_chi2, new_chi2, gtol, gradient, xtol, parameters, indices, parameters_steps, converged) :
@@ -517,6 +451,8 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
         if converged[model] == -1 :
             converged[model] = -2
     
+
+
     @prop(cache=True)
     def convergence(self) :
         if not self.cuda : return self.cpu_convergence
