@@ -19,7 +19,7 @@ class Poisson(Distribution) :
 
     @property
     def default_attributes(self):
-        return 'eps=nb.float32(1e-6), '
+        return 'nb.float32(1e-6), ' # eps
 
     @ufunc(data=['raw_data', 'model_data', 'weights'])
     def pdf(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):

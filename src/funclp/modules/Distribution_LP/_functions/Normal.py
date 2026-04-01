@@ -19,7 +19,7 @@ class Normal(Distribution) :
 
     @property
     def default_attributes(self):
-        return 'sigma=nb.float32(1), '
+        return 'nb.float32(1), ' # sigma
 
     @ufunc(data=['raw_data', 'model_data', 'weights'])
     def pdf(raw_data, model_data, weights=np.float32(1.), /, sigma=np.float32(1)):

@@ -19,7 +19,7 @@ class Binomial(Distribution) :
 
     @property
     def default_attributes(self):
-        return 'n=np.int32(1), eps=np.float32(1e-6), '
+        return 'np.int32(1), np.float32(1e-6), ' # n, eps
 
     @ufunc(data=['raw_data', 'model_data', 'weights'])
     def pdf(raw_data, model_data, weights=np.float32(1.), /, n=np.int32(1), eps=np.float32(1e-6)):

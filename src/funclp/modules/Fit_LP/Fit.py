@@ -52,6 +52,8 @@ class Fit(ABC, CudaReference) :
         self.cuda_reference = self.function
         self.estimator.cuda_reference = self.function
         selfkwargs(self, kwargs)
+        if self.cuda: self.gpu_assembly
+        
 
     # Function and estimator
     @property
@@ -140,24 +142,36 @@ class Fit(ABC, CudaReference) :
         # Initialize
         self.fit_init()
 
+        from time import perf_counter
+        timeit = 0
+
         # Iterations
         for _ in range(self.max_iterations) :
 
             # Chi2
-            self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.converged)
-            self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.converged)
-            self.deviance2chi2(self.deviance_data, self.chi2_data, self.converged)
+            if self.cuda :
+                tic = perf_counter()
+                self.gpu_assembly[self.nmodels, 128](self.raw_data, *self.variables, *self.data, *self.parameters, *self.constants, self.weights, self.chi2_data, self.gradient_data, self.hessian_data, self.parameters_bools, self.converged)
+                toc = perf_counter()
+                timeit += toc-tic
+            else :
+                tic = perf_counter()
+                self.jitted(*self.variables, *self.data, *self.parameters, *self.constants, self.model_data, self.converged)
+                self.estimator.deviance(self.raw_data, self.model_data, weights=self.weights, out=self.deviance_data, ignore=self.converged)
+                self.deviance2chi2(self.deviance_data, self.chi2_data, self.converged)
 
-            # Jacobian
-            self.jacobian(*self.variables, *self.data, *self.parameters, *self.constants, self.jacobian_data, self.parameters_bools, self.converged)
+                # Jacobian
+                self.jacobian(*self.variables, *self.data, *self.parameters, *self.constants, self.jacobian_data, self.parameters_bools, self.converged)
 
-            # Gradient
-            self.estimator.loss(self.raw_data, self.model_data, weights=self.weights, out=self.loss_data, ignore=self.converged)
-            self.loss2gradient(self.jacobian_data, self.loss_data, self.gradient_data, self.converged)
+                # Gradient
+                self.estimator.loss(self.raw_data, self.model_data, weights=self.weights, out=self.loss_data, ignore=self.converged)
+                self.loss2gradient(self.jacobian_data, self.loss_data, self.gradient_data, self.converged)
 
-            # Hessian
-            self.estimator.fisher(self.raw_data, self.model_data, weights=self.weights, out=self.fisher_data, ignore=self.converged)
-            self.fisher2hessian(self.jacobian_data, self.fisher_data, self.hessian_data, self.converged)
+                # Hessian
+                self.estimator.fisher(self.raw_data, self.model_data, weights=self.weights, out=self.fisher_data, ignore=self.converged)
+                self.fisher2hessian(self.jacobian_data, self.fisher_data, self.hessian_data, self.converged)
+                toc = perf_counter()
+                timeit += toc-tic
 
             # Reset caches
             self.hessian_cache[:] = self.hessian_data
@@ -172,6 +186,7 @@ class Fit(ABC, CudaReference) :
                 break
 
         # End
+        print(timeit)
         if transfer_back :
             self.parameters = [self.xp.asnumpy(param) for param in self.parameters]
             self.converged = self.xp.asnumpy(self.converged)
@@ -190,9 +205,9 @@ class Fit(ABC, CudaReference) :
         constants = [key for key in self.function.constants]
         inputs = ', '.join(variables + data + parameters + constants)
         inputs_threads = ', '.join([f'thread_{key}' for key in variables] + [f'thread_{key}' for key in data] + [f'block_{key}' for key in parameters] + constants)
-        thread_variables = '\n'.join([f'thread_{key} = {key}[point]' for key in variables])
-        thread_data = '\n'.join([f'thread_{key} = {key}[model, point]' for key in data])
-        block_params = '\n'.join([f'block_{key} = {key}[model]' for key in parameters])
+        thread_variables = '\n        '.join([f'thread_{key} = {key}[point]' for key in variables])
+        thread_data = '\n        '.join([f'thread_{key} = {key}[model, point]' for key in data])
+        block_params = '\n    '.join([f'block_{key} = {key}[model]' for key in parameters])
         derivatives = '\n'.join([f'''        if bool2fit[{pos}]:\n            jacob_local[count] = d_{key}({inputs_threads})\n            count += 1\n''' for pos, key in enumerate(parameters)])
         
         string = f'''
@@ -238,7 +253,7 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
         # Build active jacobian vector
         count = 0
 
-        {derivatives}
+{derivatives}
 
         # Gradient and Hessian accumulation
         for p in range(nparams):

@@ -103,6 +103,11 @@ def test_function() :
         function.offset_fit = False
         estimator = MLE(Poisson())
         fit = LM(function, estimator)
+        fit(data, X, Y)
+        cp.cuda.Stream.null.synchronize()
+        function.mux = 0
+        function.muy = 0
+        function.mux = 0.21*670/1.5
         tic = perf_counter()
         fit(data, X, Y)
         toc = perf_counter()

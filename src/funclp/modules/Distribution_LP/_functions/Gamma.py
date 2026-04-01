@@ -19,7 +19,7 @@ class Gamma(Distribution) :
 
     @property
     def default_attributes(self):
-        return 'k=nb.float32(1.), eps=nb.float32(1e-6), '
+        return 'nb.float32(1.), nb.float32(1e-6), ' # k, eps
 
     @ufunc(data=['raw_data', 'model_data', 'weights'])
     def pdf(raw_data, model_data, weights=np.float32(1.), /, k=np.float32(1.), eps=np.float32(1e-6)):

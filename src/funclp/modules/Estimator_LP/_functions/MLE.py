@@ -33,10 +33,10 @@ class MLE(Estimator) :
         kernel = self.distribution.cpukernel_loglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.njit(nogil=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-2) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.njit(nogil=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-2) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -48,10 +48,10 @@ class MLE(Estimator) :
         kernel = self.distribution.gpukernel_loglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.cuda.jit(device=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-2) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.cuda.jit(device=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-2) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -72,10 +72,10 @@ class MLE(Estimator) :
         kernel = self.distribution.cpukernel_dloglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.njit(nogil=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-1) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.njit(nogil=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-1) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -87,10 +87,10 @@ class MLE(Estimator) :
         kernel = self.distribution.gpukernel_dloglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.cuda.jit(device=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-1) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.cuda.jit(device=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-1) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -111,10 +111,10 @@ class MLE(Estimator) :
         kernel = self.distribution.cpukernel_d2loglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.njit(nogil=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-1) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.njit(nogil=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-1) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -126,10 +126,10 @@ class MLE(Estimator) :
         kernel = self.distribution.gpukernel_d2loglikelihood
         default = self.distribution.default_attributes
         string = f'''
-        @nb.cuda.jit(device=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            weight = (-1) * weights
-            return kernel(raw_data, model_data, weights, {default})
+@nb.cuda.jit(device=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    weights = (-1) * weights
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -149,9 +149,9 @@ class MLE(Estimator) :
         kernel = self.distribution.cpukernel_fisher
         default = self.distribution.default_attributes
         string = f'''
-        @nb.njit(nogil=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            return kernel(raw_data, model_data, weights, {default})
+@nb.njit(nogil=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
@@ -163,9 +163,9 @@ class MLE(Estimator) :
         kernel = self.distribution.gpukernel_fisher
         default = self.distribution.default_attributes
         string = f'''
-        @nb.cuda.jit(device=True, fastmath=True)
-        def func(raw_data, model_data, weights) :
-            return kernel(raw_data, model_data, weights, {default})
+@nb.cuda.jit(device=True, fastmath=True)
+def func(raw_data, model_data, weights) :
+    return kernel(raw_data, model_data, weights, {default})
 '''
         glob = {'nb': nb, 'kernel': kernel}
         loc = {}
