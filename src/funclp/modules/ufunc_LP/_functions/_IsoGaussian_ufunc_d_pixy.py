@@ -4,7 +4,7 @@ from funclp import ufunc
 import math
 @ufunc(data=[], constants=[], fastmath=False)
 def d_pixy(x, y, /, mux, muy, sig, amp, offset, pixx, pixy, nsig):
-    eps = 1e-4
+    eps = 1e-3 * max(1.0, abs(pixy))
     f_plus = kernel(x, y, mux, muy, sig, amp, offset, pixx, pixy + eps, nsig)
     f_minus = kernel(x, y, mux, muy, sig, amp, offset, pixx, pixy - eps, nsig)
     if math.isfinite(f_plus) and math.isfinite(f_minus):

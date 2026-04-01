@@ -138,7 +138,7 @@ from funclp import ufunc
 import math
 @ufunc(data={main_ufunc.variable2data}, constants={main_ufunc.variable2constants}, fastmath=False)
 def {dname}({main_ufunc.d_inputs}):
-    eps = 1e-4
+    eps = 1e-3 * max(1.0, abs({pname}))
     f_plus = kernel({inputs_plus})
     f_minus = kernel({inputs_minus})
     if math.isfinite(f_plus) and math.isfinite(f_minus):

@@ -87,7 +87,7 @@ class ufunc() :
         self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key not in self.variable2constants]
         self.constants = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key in self.variable2constants]
         self.inputs = ', '.join([key for key in parameters.keys()])
-        self.d_inputs = ', '.join([key for key in self.variables] + [key for key in self.data] + ['/'] + [key for key in self.parameters])
+        self.d_inputs = ', '.join([key for key in self.variables] + [key for key in self.data] + ['/'] + [key for key in self.parameters] + [key for key in self.constants])
         self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables]) + ', ' if len(self.variables) > 0 else ''
         self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data]) + ', ' if len(self.data) > 0 else ''
         self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters]) + ', ' if len(self.parameters) > 0 else ''

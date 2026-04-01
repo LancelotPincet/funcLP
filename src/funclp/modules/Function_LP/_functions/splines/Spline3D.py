@@ -12,6 +12,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline, LSQBivariateSpline, InterpolatedUnivariateSpline
 from funclp import Function, ufunc
 from corelp import rfrom
+bspline3d, bspline3d_dx, bspline3d_dy, bspline3d_dz, get_mean, get_amp, get_offset = rfrom("._splines", "bspline3d", "bspline3d_dx", "bspline3d_dy", "bspline3d_dz", "get_mean", "get_amp", "get_offset")
 bspline3d, get_mean, get_amp, get_offset = rfrom("._splines", "bspline3d", "get_mean", "get_amp", "get_offset")
 
 
@@ -90,6 +91,26 @@ class Spline3D(Function):
     def function(x, y, z, /, mux:mux=0., muy:muy=0., muz:muz=0., amp:amp=1., offset:offset=0., kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None) :
         return amp * bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x-mux, y-muy, z-muz) + offset
     
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
+    def d_mux(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
+        return -amp * bspline3d_dx(tx, ty, tz, coeffs, kx, ky, kz, x - mux, y - muy, z - muz)
+
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
+    def d_muy(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
+        return -amp * bspline3d_dy(tx, ty, tz, coeffs, kx, ky, kz, x - mux, y - muy, z - muz)
+
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
+    def d_muz(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
+        return -amp * bspline3d_dz(tx, ty, tz, coeffs, kx, ky, kz, x - mux, y - muy, z - muz)
+
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
+    def d_amp(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
+        return bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x - mux, y - muy, z - muz)
+
+    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
+    def d_offset(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
+        return np.float32(1.0)
+
 
 
 # %% Test function run

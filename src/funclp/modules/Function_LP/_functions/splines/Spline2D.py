@@ -12,7 +12,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline
 from funclp import Function, ufunc
 from corelp import rfrom
-bspline2d, get_mean, get_amp, get_offset = rfrom("._splines", "bspline2d", "get_mean", "get_amp", "get_offset")
+bspline2d, bspline2d_dx, bspline2d_dy, get_mean, get_amp, get_offset = rfrom("._splines", "bspline2d", "bspline2d_dx", "bspline2d_dy", "get_mean", "get_amp", "get_offset")
 
 
 
@@ -65,7 +65,23 @@ class Spline2D(Function):
     @ufunc(constants=["tx", "ty", "coeffs"])
     def function(x, y, /, mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., kx=3, ky=3, tx=None, ty=None, coeffs=None) :
         return amp * bspline2d(tx, ty, coeffs, kx, ky, x-mux, y-muy) + offset
-    
+
+    @ufunc(constants=["tx", "ty", "coeffs"])
+    def d_mux(x, y, /, mux, muy, amp, offset, kx, ky, tx=None, ty=None, coeffs=None):
+        return -amp * bspline2d_dx(tx, ty, coeffs, kx, ky, x - mux, y - muy)
+
+    @ufunc(constants=["tx", "ty", "coeffs"])
+    def d_muy(x, y, /, mux, muy, amp, offset, kx, ky, tx=None, ty=None, coeffs=None):
+        return -amp * bspline2d_dy(tx, ty, coeffs, kx, ky, x - mux, y - muy)
+
+    @ufunc(constants=["tx", "ty", "coeffs"])
+    def d_amp(x, y, /, mux, muy, amp, offset, kx, ky, tx=None, ty=None, coeffs=None):
+        return bspline2d(tx, ty, coeffs, kx, ky, x - mux, y - muy)
+
+    @ufunc(constants=["tx", "ty", "coeffs"])
+    def d_offset(x, y, /, mux, muy, amp, offset, kx, ky, tx=None, ty=None, coeffs=None):
+        return np.float32(1.0)
+
 
 
 # %% Test function run

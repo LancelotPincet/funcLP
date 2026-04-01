@@ -12,7 +12,7 @@ import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
 from funclp import Function, ufunc
 from corelp import rfrom
-bspline1d, get_mean, get_amp, get_offset = rfrom("._splines", "bspline1d", "get_mean", "get_amp", "get_offset")
+bspline1d, bspline1d_dx, get_mean, get_amp, get_offset = rfrom("._splines", "bspline1d", "bspline1d_dx", "get_mean", "get_amp", "get_offset")
 
 
 
@@ -57,6 +57,18 @@ class Spline(Function):
     def function(x, /, mu:mu=0., amp:amp=1., offset:offset=0., k=3, t=None, coeffs=None) :
         return amp * bspline1d(t, coeffs, k, x-mu) + offset
     
+    @ufunc(constants=["t", "coeffs"])
+    def d_mu(x, /, mu, amp, offset, k=3, t=None, coeffs=None):
+        return -amp * bspline1d_dx(t, coeffs, k, x - mu)
+
+    @ufunc(constants=["t", "coeffs"])
+    def d_amp(x, /, mu, amp, offset, k=3, t=None, coeffs=None):
+        return bspline1d(t, coeffs, k, x - mu)
+
+    @ufunc(constants=["t", "coeffs"])
+    def d_offset(x, /, mu, amp, offset, k=3, t=None, coeffs=None):
+        return np.float32(1.0)  
+
 
 
 # %% Test function run
