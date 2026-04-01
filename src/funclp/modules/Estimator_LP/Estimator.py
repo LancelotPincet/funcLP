@@ -53,16 +53,48 @@ class Estimator(ABC, CudaReference) :
 
     #ABC
     @abstractmethod
-    def deviance(self, raw_data, model_data, /, weights=1, **kwargs) :
+    def deviance(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def cpukernel_deviance(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def gpukernel_deviance(self, raw_data, model_data, weights=1, **kwargs) :
         pass
     @abstractmethod
-    def loss(self, raw_data, model_data, /, weights=1, **kwargs) :
+    def loss(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def cpukernel_loss(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def gpukernel_loss(self, raw_data, model_data, weights=1, **kwargs) :
         pass
     @abstractmethod
-    def observed(self, raw_data, model_data, /, weights=1, **kwargs) :
+    def observed(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def cpukernel_observed(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def gpukernel_observed(self, raw_data, model_data, weights=1, **kwargs) :
         pass
     @abstractmethod
-    def fisher(self, raw_data, model_data, /, weights=1, **kwargs) :
+    def fisher(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def cpukernel_fisher(self, raw_data, model_data, weights=1, **kwargs) :
+        pass
+    @property
+    @abstractmethod
+    def gpukernel_fisher(self, raw_data, model_data, weights=1, **kwargs) :
         pass
 
 

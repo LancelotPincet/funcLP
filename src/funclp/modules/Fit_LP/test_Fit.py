@@ -38,7 +38,7 @@ def test_function() :
     # Making coordinates
     v = np.linspace(-500, 500, 11)
     X, Y = np.meshgrid(v, v)
-    npoints = 1000
+    npoints = 10000
     
     # Making experimental data
     sigma = 0.21*670/1.5 * np.random.normal(1, 0.1, npoints) #nm
@@ -50,29 +50,30 @@ def test_function() :
     data = np.random.poisson(data)
 
     # Making curve_fit fit as reference
-    cf_mux = np.zeros(npoints)
-    cf_muy = np.zeros(npoints)
-    cf_sig = np.zeros(npoints)
-    def model(XY, mux, muy, sig):
-        f = IsoGaussian(cuda=False, mux=mux, muy=muy, sig=sig, pix=100, integ=N)
-        return f(XY[0], XY[1]).ravel().astype(float)
-    tic = perf_counter()
-    for i in range(npoints):
-        try:
-            p0 = [0., 0., 0.21*670/1.5]
-            popt, _ = curve_fit(model, (X, Y), data[i].ravel().astype(float), p0=p0, method='lm')
-            cf_mux[i], cf_muy[i], cf_sig[i] = popt
-        except RuntimeError:
-            cf_mux[i], cf_muy[i], cf_sig[i] = np.nan, np.nan, np.nan
-    toc = perf_counter()
-    cf_error_mux = cf_mux - groundtruth_function.mux
-    cf_error_muy = cf_muy - groundtruth_function.muy
-    cf_error_sig = cf_sig - groundtruth_function.sig
-    print(f'\ncurve_fit took {toc-tic:.3f}s')
-    print(f'curve_fit converged: {npoints - np.sum(np.isnan(cf_sig))}/{npoints}')
-    print(f'curve_fit Mux error: {np.nanmean(cf_error_mux):.3f} +/- {np.nanstd(cf_error_mux):.3f}')
-    print(f'curve_fit Muy error: {np.nanmean(cf_error_muy):.3f} +/- {np.nanstd(cf_error_muy):.3f}')
-    print(f'curve_fit Sig error: {np.nanmean(cf_error_sig):.3f} +/- {np.nanstd(cf_error_sig):.3f}')
+    if npoints <= 1000 :
+        cf_mux = np.zeros(npoints)
+        cf_muy = np.zeros(npoints)
+        cf_sig = np.zeros(npoints)
+        f = IsoGaussian(cuda=False, mux=mux, muy=muy, sig=0.21*670/1.5, pix=100, integ=N)
+        def model(XY, mux, muy, sig):
+            return f(XY[0], XY[1], mux=mux, muy=muy, sig=sig).ravel().astype(float)
+        tic = perf_counter()
+        for i in range(npoints):
+            try:
+                p0 = [0., 0., 0.21*670/1.5]
+                popt, _ = curve_fit(model, (X, Y), data[i].ravel().astype(float), p0=p0, method='lm')
+                cf_mux[i], cf_muy[i], cf_sig[i] = popt
+            except RuntimeError:
+                cf_mux[i], cf_muy[i], cf_sig[i] = np.nan, np.nan, np.nan
+        toc = perf_counter()
+        cf_error_mux = cf_mux - groundtruth_function.mux
+        cf_error_muy = cf_muy - groundtruth_function.muy
+        cf_error_sig = cf_sig - groundtruth_function.sig
+        print(f'\ncurve_fit took {toc-tic:.3f}s')
+        print(f'curve_fit converged: {npoints - np.sum(np.isnan(cf_sig))}/{npoints}')
+        print(f'curve_fit Mux error: {np.nanmean(cf_error_mux):.3f} +/- {np.nanstd(cf_error_mux):.3f}')
+        print(f'curve_fit Muy error: {np.nanmean(cf_error_muy):.3f} +/- {np.nanstd(cf_error_muy):.3f}')
+        print(f'curve_fit Sig error: {np.nanmean(cf_error_sig):.3f} +/- {np.nanstd(cf_error_sig):.3f}')
     
 
     # Making Fit

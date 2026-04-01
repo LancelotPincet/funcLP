@@ -87,7 +87,7 @@ class LM(Fit) :
                 hessian[model, param, param] += damping[model] * max(1e-12, abs(hessian_cache[model, param, param]))
     
     @staticmethod
-    @nb.cuda.jit()
+    @nb.cuda.jit(cache=True)
     def gpu_damping(hessian, hessian_cache, damping, damping_min, damping_max, tau, initialized, improved):
         nmodels, nparams, _ = hessian.shape
         model, param, paramT = nb.cuda.grid(3)
@@ -166,7 +166,7 @@ class LM(Fit) :
                 steps[model, i] = s / hessian[model, i, i]
 
     @staticmethod
-    @nb.cuda.jit()
+    @nb.cuda.jit(cache=True)
     def gpu_solve(hessian, gradient, steps, ignore) :
         model = nb.cuda.blockIdx.x
         tid = nb.cuda.threadIdx.x
@@ -239,7 +239,7 @@ class LM(Fit) :
                 parameters[model, indices[param]] = val
 
     @staticmethod
-    @nb.cuda.jit()
+    @nb.cuda.jit(cache=True)
     def gpu_paramchange(parameters, indices, steps, bounds_min, bounds_max, ignore) :
         nmodels, nparams = steps.shape
         model, param = nb.cuda.grid(2)
@@ -309,7 +309,7 @@ class LM(Fit) :
                         damping[model] = damping_max
 
     @staticmethod
-    @nb.cuda.jit()
+    @nb.cuda.jit(cache=True)
     def gpu_improving(old_chi2, new_chi2, parameters, indices, steps, gradient, hessian, damping, nu, damping_max, damping_min, converged, improved, ignore) :
         nmodels, nparams = steps.shape
         model = nb.cuda.grid(1)

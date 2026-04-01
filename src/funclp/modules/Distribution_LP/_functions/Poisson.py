@@ -17,8 +17,12 @@ import math
 
 class Poisson(Distribution) :
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def pdf(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @property
+    def default_attributes(self):
+        return 'eps=nb.float32(1e-6), '
+
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def pdf(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Probability Density Function."""
         lam = eps if model_data < eps else model_data
         k = raw_data
@@ -26,36 +30,36 @@ class Poisson(Distribution) :
         log_pdf = -lam + k*math.log(lam) - math.lgamma(k+1)
         return (math.exp(log_pdf) * lam ** k / math.lgamma(k + 1)) * weights
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def loglikelihood_reduced(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def loglikelihood_reduced(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Log-likelihood up to additive constants."""
         lam = eps if model_data < eps else model_data
         k = raw_data if raw_data > 0 else 0
         return (k * math.log(lam) - lam) * weights
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def loglikelihood(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def loglikelihood(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Exact log-likelihood (with constants)."""
         lam = eps if model_data < eps else model_data
         k = raw_data if raw_data > 0 else 0
         return (k * math.log(lam) - lam - math.lgamma(k + 1)) * weights
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def dloglikelihood(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def dloglikelihood(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Derivative of log-likelihood w.r.t model parameter."""
         lam = eps if model_data < eps else model_data
         k = raw_data if raw_data > 0 else 0
         return ((k - lam) / lam) * weights
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def d2loglikelihood(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def d2loglikelihood(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Second derivative of log-likelihood (observed curvature)."""
         lam = eps if model_data < eps else model_data
         k = raw_data if raw_data > 0 else 0
         return (-k / (lam ** 2)) * weights
 
-    @ufunc(data=['raw_data', 'model_data'])
-    def fisher(raw_data, model_data, /, eps=np.float32(1e-6), weights=np.float32(1.)):
+    @ufunc(data=['raw_data', 'model_data', 'weights'])
+    def fisher(raw_data, model_data, weights=np.float32(1.), /, eps=np.float32(1e-6)):
         """Expected curvature (Fisher information)."""
         lam = eps if model_data < eps else model_data
         return (1.0 / lam) * weights
