@@ -17,7 +17,7 @@ Fit : Class defining fitting algorithms.
 # %% Libraries
 from corelp import debug
 import pytest
-from funclp import LM, IsoGaussian, Spline2D, MLE, Poisson
+from funclp import LM, IsoGaussian, Spline2D, MLE, Poisson, Normal
 import numpy as np
 from time import perf_counter
 try :
@@ -39,13 +39,14 @@ def test_function() :
     v = np.linspace(-500, 500, 11)
     X, Y = np.meshgrid(v, v)
     npoints = 100000
-    do_spline = True
+    do_spline = False
+    do_poisson = True
     
     # Making experimental data
     sigma = 0.21*670/1.5 #nm
     mux = np.random.uniform(-50, 50, npoints)
     muy = np.random.uniform(-50, 50, npoints)
-    N = 2000 #photons
+    N = 500 #photons
     groundtruth_function = IsoGaussian(sig=sigma, mux=mux, muy=muy, pix=100, integ=N)
     data = groundtruth_function(X, Y)
     data = np.random.poisson(data)
@@ -88,9 +89,10 @@ def test_function() :
         function = Spline2D(cuda=False, tx=tx, ty=ty, coeffs=coeffs, amp=np.ones(npoints))
     else :
         function = IsoGaussian(cuda=False, sig=np.full(npoints, 0.21*670/1.5), pix=100, integ=N)
+    estimator = Poisson() if do_poisson else Normal()
     function.amp_fit = False
     function.offset_fit = False
-    estimator = MLE(Poisson())
+    estimator = MLE(estimator)
     fit = LM(function, estimator)
     tic = perf_counter()
     fit(data, X, Y)
@@ -112,9 +114,10 @@ def test_function() :
             function = Spline2D(cuda=True, tx=tx, ty=ty, coeffs=coeffs, amp=np.ones(npoints))
         else :
             function = IsoGaussian(cuda=True, sig=np.full(npoints, 0.21*670/1.5), pix=100, integ=N)
+        estimator = Poisson() if do_poisson else Normal()
         function.amp_fit = False
         function.offset_fit = False
-        estimator = MLE(Poisson())
+        estimator = MLE(estimator)
         fit = LM(function, estimator)
         fit(data, X, Y)
         cp.cuda.Stream.null.synchronize()
