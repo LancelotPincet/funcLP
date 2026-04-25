@@ -14,6 +14,7 @@ Decorator class defining universal function factory object from python kernel fu
 
 # %% Libraries
 from funclp import make_calculation
+from funclp.modules.Function_LP._functions.Parameter import Parameter
 import inspect
 import importlib
 from pathlib import Path
@@ -27,14 +28,12 @@ class ufunc() :
     
     Examples
     --------
-    >>> from funclp import ufunc
+    >>> from funclp import Parameter, ufunc
     >>> import numpy as np
     ... 
     >>> class MyClass() :
-    ...     @ufunc() # <-- HERE IS THE DECORATOR TO USE ON A SCALAR METHOD
+    ...     @ufunc(variables=['x', 'y'], data=['constant'], parameters=[Parameter('a', 1), Parameter('b', 0)])
     ...     def myfunc(x, y, constant, /, a, b) :
-    ...         # Positional only : variables of size npoints, all broadcastable together, then all data of same shape as output, all broadcastable together (must be stepcified in data=[])
-    ...         # Positional and keyword : parameters of size nmodels, all broadcastable together
     ...         return a * x + b * y + constant
     ...     cuda = False
     ... 
@@ -54,46 +53,97 @@ class ufunc() :
 
     main_functions = {}
 
-    def __init__(self, *, data=[], constants=[], fastmath=True) :
-        self.variable2data = data
-        self.variable2constants = constants
+    def __init__(self, *, variables=None, data=None, parameters=None, constants=None, main=False, fastmath=True) :
+        self._variables_metadata = variables
+        self._data_metadata = data
+        self._parameters_metadata = parameters
+        self._constants_metadata = constants
+        self.main = main
         self.fastmath = fastmath
 
     def __call__(self, function):
         '''Decorator logic'''
         self.function = function
         self.signature = inspect.signature(function)
+        self._prepared = False
+
+        return self
+
+    def _prepare_metadata(self, owner=None, name=None):
+        if self._prepared :
+            return
+
+        signature_parameters = self.signature.parameters
+
+        inherited = None
+        needs_inheritance = self._variables_metadata is None or self._parameters_metadata is None
+        if needs_inheritance and owner is not None and name != 'function' :
+            main_ufunc = getattr(owner, 'function', None)
+            if isinstance(main_ufunc, ufunc) and main_ufunc is not self :
+                main_ufunc._prepare_metadata(owner, 'function')
+                inherited = main_ufunc
+
+        if self._variables_metadata is None :
+            if inherited is None :
+                raise SyntaxError('@ufunc must define variables=[...] explicitly')
+            self.variables = list(inherited.variables)
+        else :
+            self.variables = list(self._variables_metadata)
+
+        self.data = list(inherited.data if self._data_metadata is None and inherited is not None else self._data_metadata or [])
+        self.constants = list(inherited.constants if self._constants_metadata is None and inherited is not None else self._constants_metadata or [])
+
+        if self._parameters_metadata is None :
+            if inherited is None :
+                raise SyntaxError('@ufunc must define parameters=[Parameter(...), ...] explicitly')
+            self.parameters = list(inherited.parameters)
+            self.parameter_specs = dict(inherited.parameter_specs)
+        else :
+            self.parameters, self.parameter_specs = self._normalize_parameters(self._parameters_metadata)
+
+        declared_inputs = self.variables + self.data + self.parameters + self.constants
+        for key in declared_inputs :
+            if key not in signature_parameters :
+                raise SyntaxError(f'{key} is declared in @ufunc metadata but is missing from the function signature')
 
         # Checking input definition follows rules 
-        parameters = self.signature.parameters
         passed_data = False 
-        for key, value in parameters.items() :
+        for key, value in signature_parameters.items() :
             match value.kind :
                 case inspect.Parameter.POSITIONAL_ONLY :
-                    if key in self.variable2data :
+                    if key in self.data :
                         passed_data = True
+                    elif key not in self.variables :
+                        raise SyntaxError(f'{key} positional-only input must be declared in variables or data')
                     elif passed_data :
                         raise SyntaxError('Cannot define variables inputs after data inputs, please put all variables before data')
-                    else :
-                        pass
                 case inspect.Parameter.POSITIONAL_OR_KEYWORD :
-                    continue
+                    if key not in self.parameters and key not in self.constants :
+                        raise SyntaxError(f'{key} parameter input must be declared with Parameter(...) or constants')
                 case inspect.Parameter.KEYWORD_ONLY :
                     raise SyntaxError('ufunc cannot have keyword only attributes')
 
-        # Get variable and parameters of the function 
-        self.variables = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key not in self.variable2data]
-        self.data = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_ONLY and key in self.variable2data]
-        self.parameters = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key not in self.variable2constants]
-        self.constants = [key for key, value in parameters.items() if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD and key in self.variable2constants]
-        self.inputs = ', '.join([key for key in parameters.keys()])
+        self.inputs = ', '.join(declared_inputs)
         self.d_inputs = ', '.join([key for key in self.variables] + [key for key in self.data] + ['/'] + [key for key in self.parameters] + [key for key in self.constants])
         self.indexes_variables = ', '.join([f'{key}[point]' for key in self.variables]) + ', ' if len(self.variables) > 0 else ''
         self.indexes_data = ', '.join([f'{key}[model, point]' for key in self.data]) + ', ' if len(self.data) > 0 else ''
         self.indexes_parameters = ', '.join([f'{key}[model]' for key in self.parameters]) + ', ' if len(self.parameters) > 0 else ''
         self.indexes_constants = ', '.join([key for key in self.constants]) + ', ' if len(self.constants) > 0 else ''
-  
-        return self
+
+        self._prepared = True
+
+    def _normalize_parameters(self, metadata):
+        if isinstance(metadata, dict) :
+            metadata = metadata.values()
+
+        names = []
+        specs = {}
+        for spec in metadata :
+            if not isinstance(spec, Parameter) :
+                raise SyntaxError('ufunc parameters must be declared with Parameter(...)')
+            names.append(spec.name)
+            specs[spec.name] = spec
+        return names, specs
 
     def __get__(self, instance, owner):
         '''function called'''
@@ -104,6 +154,7 @@ class ufunc() :
     def __set_name__(self, cls, name):
         '''Descriptor setup'''
         self.name = name
+        self._prepare_metadata(cls, name)
         classname = cls.__name__
         self.main_functions[f'{classname}_{name}'] = self.function
         setattr(cls, f'python_{name}', self.function)

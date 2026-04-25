@@ -8,7 +8,8 @@
 
 
 # %% Libraries
-from funclp import Function, ufunc
+import numpy as np
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 j1, get_mean, get_amp, get_offset = rfrom("._airys", "j1", "get_mean", "get_amp", "get_offset")
 
@@ -16,11 +17,11 @@ j1, get_mean, get_amp, get_offset = rfrom("._airys", "j1", "get_mean", "get_amp"
 
 # %% Parameters
 
-def mu(res, *args) -> (None, None) :
+def mu(res, *args) :
     return get_mean(res, args[0])
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -29,8 +30,18 @@ def offset(res, *args) -> (None, None) :
 
 class Airy(Function):
 
-    @ufunc()
-    def function(x, /, mu:mu=0., amp:amp=1., offset:offset=0., wl=550., NA=1.5, tol=1.) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("mu", 0., estimate=mu),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("wl", 550.),
+            Parameter("NA", 1.5),
+            Parameter("tol", 1.),
+        ],
+    )
+    def function(x, /, mu=0., amp=1., offset=0., wl=550., NA=1.5, tol=1.) :
         r = abs(x-mu)
         if r < tol :
             return amp + offset

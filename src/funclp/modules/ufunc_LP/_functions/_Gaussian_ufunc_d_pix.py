@@ -1,8 +1,8 @@
 
 from ._Gaussian_cpukernel_function import _Gaussian_cpukernel_function as kernel
-from funclp import ufunc
+from funclp import Parameter, ufunc
 import math
-@ufunc(data=[], constants=[], fastmath=False)
+@ufunc(variables=['x'], data=[], parameters=[Parameter('mu', 0.0), Parameter('sig', 0.3989422804014327), Parameter('amp', 1.0), Parameter('offset', 0.0), Parameter('pix', -1.0), Parameter('nsig', -1.0)], constants=[], fastmath=False)
 def d_pix(x, /, mu, sig, amp, offset, pix, nsig):
     eps = 1e-3 * max(1.0, abs(pix))
     f_plus = kernel(x, mu, sig, amp, offset, pix + eps, nsig)

@@ -17,8 +17,6 @@ from corelp import prop, selfkwargs
 from funclp import CudaReference
 from abc import ABC, abstractmethod
 import numpy as np
-import math
-import inspect
 import importlib
 from pathlib import Path
 cache_folder = Path(__file__).parents[1] / 'ufunc_LP/_functions'
@@ -92,24 +90,24 @@ class Function(ABC, CudaReference) :
                 setattr(instance, key, value)
         cls.constants = prop
 
+        # Looping on constants
+        for pname in main_ufunc.constants:
+            @property
+            def prop(instance, pname=pname) :
+                _param = getattr(instance, f'_{pname}', None)
+                if _param is not None :
+                    return _param
+                raise SyntaxError('This constant should be defined at function init time')
+            @prop.setter
+            def prop(instance, value, pname=pname) :
+                setattr(instance, f'_{pname}', convert(value))
+            setattr(cls, pname, prop)
+
         # Looping on parameters
-        for pname, param in main_ufunc.signature.parameters.items():
-
-            #constant property
-            if pname in main_ufunc.constants :
-                @property
-                def prop(instance, pname=pname) :
-                    _param = getattr(instance, f'_{pname}', None)
-                    if _param is not None :
-                        return _param
-                    raise SyntaxError('This constant should be defined at function init time')
-                @prop.setter
-                def prop(instance, value, pname=pname) :
-                    setattr(instance, f'_{pname}', convert(value))
-                setattr(cls, pname, prop)
-
-            # Single parameters only below
-            if pname not in main_ufunc.parameters : continue
+        for pname in main_ufunc.parameters:
+            spec = main_ufunc.parameter_specs.get(pname, None)
+            if spec is None:
+                raise SyntaxError(f'{pname} parameter should be declared in @ufunc(parameters=...)')
 
             #parameter property
             @property
@@ -132,11 +130,12 @@ class Function(ABC, CudaReference) :
                 file = cache_folder / f'_{classname}_ufunc_{dname}.py'
                 inputs_plus = main_ufunc.inputs.replace(pname, f'{pname} + eps')
                 inputs_minus = main_ufunc.inputs.replace(pname, f'{pname} - eps')
+                parameters = ', '.join([parameter_code(main_ufunc.parameter_specs[key]) for key in main_ufunc.parameters])
                 string = f'''
 from ._{classname}_cpukernel_function import _{classname}_cpukernel_function as kernel
-from funclp import ufunc
+from funclp import Parameter, ufunc
 import math
-@ufunc(data={main_ufunc.variable2data}, constants={main_ufunc.variable2constants}, fastmath=False)
+@ufunc(variables={main_ufunc.variables!r}, data={main_ufunc.data!r}, parameters=[{parameters}], constants={main_ufunc.constants!r}, fastmath=False)
 def {dname}({main_ufunc.d_inputs}):
     eps = 1e-3 * max(1.0, abs({pname}))
     f_plus = kernel({inputs_plus})
@@ -158,24 +157,19 @@ def {dname}({main_ufunc.d_inputs}):
                 d_ufunc.__set_name__(cls, dname)
                 setattr(cls, dname, d_ufunc)
 
-            #Default value
-            if param.default is not inspect._empty :
-                setattr(cls, f'_{pname}0', convert(param.default))
-            else :
-                raise SyntaxError(f'{pname} parameter should have a default value')
+            setattr(cls, f'_{pname}0', convert(spec.default))
 
             #Estimate parameters function
-            estimate = param.annotation
-            if estimate is inspect._empty :
+            estimate = spec.estimate
+            if estimate is None :
                 setattr(cls, f'{pname}0', None)
                 setattr(cls, f'{pname}_min', -np.float32(np.inf))
                 setattr(cls, f'{pname}_max', +np.float32(np.inf))
-                setattr(cls, f'{pname}_fit', False)
+                setattr(cls, f'{pname}_fit', bool(spec.fit))
             else :
                 setattr(cls, f'{pname}0', staticmethod(estimate))
-                setattr(cls, f'{pname}_fit', True)
-                minmax = estimate.__annotations__.get('return', None)
-                mini, maxi = (None, None) if minmax is None else minmax
+                setattr(cls, f'{pname}_fit', bool(spec.fit))
+                mini, maxi = spec.bounds
                 if mini is None : mini = -np.float32(np.inf)
                 if maxi is None : maxi = +np.float32(np.inf)
                 setattr(cls, f'{pname}_min', mini)
@@ -275,6 +269,18 @@ def convert(value) :
             return np.float32(value)
         else :
             raise TypeError(f'Parameter cannot have {type(value)} dtype')
+
+
+
+def parameter_code(parameter) :
+    return f'Parameter({parameter.name!r}, {value_code(parameter.default)})'
+
+
+
+def value_code(value) :
+    if isinstance(value, np.generic) :
+        return repr(value.item())
+    return repr(value)
 
 
 

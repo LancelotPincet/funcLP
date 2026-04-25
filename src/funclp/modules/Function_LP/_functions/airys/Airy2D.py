@@ -9,7 +9,8 @@
 
 # %% Libraries
 import math
-from funclp import Function, ufunc
+import numpy as np
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 j1, get_mean, get_amp, get_offset = rfrom("._airys", "j1", "get_mean", "get_amp", "get_offset")
 
@@ -17,13 +18,13 @@ j1, get_mean, get_amp, get_offset = rfrom("._airys", "j1", "get_mean", "get_amp"
 
 # %% Parameters
 
-def mux(res, *args) -> (None, None) :
+def mux(res, *args) :
     return get_mean(res, args[0])
-def muy(res, *args) -> (None, None) :
+def muy(res, *args) :
     return get_mean(res, args[1])
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -32,8 +33,19 @@ def offset(res, *args) -> (None, None) :
 
 class Airy2D(Function):
 
-    @ufunc()
-    def function(x, y, /, mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0., wl=550., NA=1.5, tol=1.) :
+    @ufunc(
+        variables=["x", "y"],
+        parameters=[
+            Parameter("mux", 0., estimate=mux),
+            Parameter("muy", 0., estimate=muy),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("wl", 550.),
+            Parameter("NA", 1.5),
+            Parameter("tol", 1.),
+        ],
+    )
+    def function(x, y, /, mux=0., muy=0., amp=1., offset=0., wl=550., NA=1.5, tol=1.) :
         r = math.sqrt((x - mux)**2 + (y - muy)**2)
         if r < tol :
             return amp + offset

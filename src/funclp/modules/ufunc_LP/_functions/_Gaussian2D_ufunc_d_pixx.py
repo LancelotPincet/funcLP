@@ -1,8 +1,8 @@
 
 from ._Gaussian2D_cpukernel_function import _Gaussian2D_cpukernel_function as kernel
-from funclp import ufunc
+from funclp import Parameter, ufunc
 import math
-@ufunc(data=[], constants=[], fastmath=False)
+@ufunc(variables=['x', 'y'], data=[], parameters=[Parameter('mux', 0.0), Parameter('muy', 0.0), Parameter('sigx', 0.15915494309189535), Parameter('sigy', 0.15915494309189535), Parameter('amp', 1.0), Parameter('offset', 0.0), Parameter('pixx', -1.0), Parameter('pixy', -1.0), Parameter('nsig', -1.0), Parameter('theta', 0.0)], constants=[], fastmath=False)
 def d_pixx(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta):
     eps = 1e-3 * max(1.0, abs(pixx))
     f_plus = kernel(x, y, mux, muy, sigx, sigy, amp, offset, pixx + eps, pixy, nsig, theta)

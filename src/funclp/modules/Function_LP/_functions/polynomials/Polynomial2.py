@@ -9,18 +9,18 @@
 
 # %% Libraries
 import numpy as np
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 
 
 
 # %% Parameters
 
-def a(res, *args) -> (None, None) :
+def a(res, *args) :
     return np.nanmean(np.gradient(res,args[0]))/2
-def b(res, *args) -> (None, None) :
+def b(res, *args) :
     return np.nanmean(np.gradient(res-a(res,args[0])*args[0]**2,args[0]))
-def c(res, *args) -> (None, None) :
-    return np.nanmean(res - a(res,args[0])*args[0]**2 - b*(res,args[0])*args[0])
+def c(res, *args) :
+    return np.nanmean(res - a(res,args[0])*args[0]**2 - b(res,args[0])*args[0])
 
 
 
@@ -28,21 +28,28 @@ def c(res, *args) -> (None, None) :
 
 class Polynomial2(Function):
 
-    @ufunc()
-    def function(x, /, a:a=1., b:b=0., c:c=0.) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("a", 1., estimate=a),
+            Parameter("b", 0., estimate=b),
+            Parameter("c", 0., estimate=c),
+        ],
+    )
+    def function(x, /, a=1., b=0., c=0.) :
         return a * x**2 + b * x + c
     
     
 
     # Parameters derivatives
     @ufunc()
-    def d_a(x, /, a, b) :
+    def d_a(x, /, a, b, c) :
         return x**2
     @ufunc()
-    def d_b(x, /, a, b) :
+    def d_b(x, /, a, b, c) :
         return x
     @ufunc()
-    def d_c(x, /, a, b) :
+    def d_c(x, /, a, b, c) :
         return 1
 
 

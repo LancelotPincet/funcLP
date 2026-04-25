@@ -129,7 +129,7 @@ def use_shapes(variables, data, parameters) :
 
     # Calculate outputs
     nmodels = data_shape[0]
-    npoints = np.prod(data_shape[1:])
+    npoints = int(np.prod(data_shape[1:]))
     return (nomodel, nopoint), (nmodels, npoints), (variables_shape, data_shape, parameters_shape)
 
 

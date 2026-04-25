@@ -10,7 +10,7 @@
 # %% Libraries
 import numpy as np
 import scipy.special as sc
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 gausfunc, get_mean, get_std, get_amp, get_offset = rfrom("._gaussians", "gausfunc", "get_mean", "get_std", "get_amp", "get_offset")
 
@@ -18,13 +18,13 @@ gausfunc, get_mean, get_std, get_amp, get_offset = rfrom("._gaussians", "gausfun
 
 # %% Parameters
 
-def mu(res, *args) -> (None, None) :
+def mu(res, *args) :
     return get_mean(res, args[0])
-def sig(res, *args) -> (0, None) :
+def sig(res, *args) :
     return get_std(res, args[0])
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -33,8 +33,18 @@ def offset(res, *args) -> (None, None) :
 
 class Gaussian(Function):
 
-    @ufunc()
-    def function(x, /, mu:mu=0., sig:sig=1/np.sqrt(2*np.pi), amp:amp=1., offset:offset=0., pix=-1., nsig=-1.) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("mu", 0., estimate=mu),
+            Parameter("sig", 1/np.sqrt(2*np.pi), estimate=sig, bounds=(0, None)),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("pix", -1.),
+            Parameter("nsig", -1.),
+        ],
+    )
+    def function(x, /, mu=0., sig=1/np.sqrt(2*np.pi), amp=1., offset=0., pix=-1., nsig=-1.) :
         return gausfunc(x, mu, sig, amp, offset, pix, nsig)
     
 

@@ -41,8 +41,19 @@ def use_inputs(self, args, kwargs) :
     '''
 
     # Separate inputs
-    bound = self.signature.bind(*args, **kwargs)
-    bound.apply_defaults()
+    bound = self.signature.bind_partial(*args, **kwargs)
+    signature_parameters = self.signature.parameters
+
+    for key in self.variables + self.data :
+        if key not in bound.arguments :
+            default = signature_parameters[key].default
+            if default is signature_parameters[key].empty :
+                raise TypeError(f'Missing required input: {key}')
+            bound.arguments[key] = default
+
+    for key in self.parameters :
+        if key not in bound.arguments :
+            bound.arguments[key] = self.parameter_specs[key].default
 
     # Bounding
     variables = [bound.arguments[key] for key in self.variables]

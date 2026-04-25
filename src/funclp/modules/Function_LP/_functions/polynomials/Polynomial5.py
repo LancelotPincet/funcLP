@@ -9,23 +9,23 @@
 
 # %% Libraries
 import numpy as np
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 
 
 
 # %% Parameters
 
-def a(res, *args) -> (None, None) :
+def a(res, *args) :
     return 1
-def b(res, *args) -> (None, None) :
+def b(res, *args) :
     return 0
-def c(res, *args) -> (None, None) :
+def c(res, *args) :
     return 0
-def d(res, *args) -> (None, None) :
+def d(res, *args) :
     return 0
-def e(res, *args) -> (None, None) :
+def e(res, *args) :
     return 0
-def f(res, *args) -> (None, None) :
+def f(res, *args) :
     return 0
 
 
@@ -34,30 +34,40 @@ def f(res, *args) -> (None, None) :
 
 class Polynomial5(Function):
 
-    @ufunc()
-    def function(x, /, a:a=1., b:b=0., c:c=0., d:d=0., e:e=0., f:f=0.) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("a", 1., estimate=a),
+            Parameter("b", 0., estimate=b),
+            Parameter("c", 0., estimate=c),
+            Parameter("d", 0., estimate=d),
+            Parameter("e", 0., estimate=e),
+            Parameter("f", 0., estimate=f),
+        ],
+    )
+    def function(x, /, a=1., b=0., c=0., d=0., e=0., f=0.) :
         return a * x**5 + b * x**4 + c * x**3 + d * x**2 + e * x + f
     
     
 
     # Parameters derivatives
     @ufunc()
-    def d_a(x, /, a, b) :
+    def d_a(x, /, a, b, c, d, e, f) :
         return x**5
     @ufunc()
-    def d_b(x, /, a, b) :
+    def d_b(x, /, a, b, c, d, e, f) :
         return x**4
     @ufunc()
-    def d_c(x, /, a, b) :
+    def d_c(x, /, a, b, c, d, e, f) :
         return x**3
     @ufunc()
-    def d_d(x, /, a, b) :
+    def d_d(x, /, a, b, c, d, e, f) :
         return x**2
     @ufunc()
-    def d_e(x, /, a, b) :
+    def d_e(x, /, a, b, c, d, e, f) :
         return x
     @ufunc()
-    def d_f(x, /, a, b) :
+    def d_f(x, /, a, b, c, d, e, f) :
         return 1
 
 

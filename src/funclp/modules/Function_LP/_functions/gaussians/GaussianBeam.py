@@ -10,17 +10,17 @@
 # %% Libraries
 import math
 import numpy as np
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 
 
 
 # %% Parameters
 
-def w0(res, *args) -> (0, None) :
+def w0(res, *args) :
     return np.nanmin(res)
-def z0(res, *args) -> (None, None) :
+def z0(res, *args) :
     return args[0][np.nanargmin(res)]
-def m2(res, *args) -> (1, None) :
+def m2(res, *args) :
     return 1
 
 
@@ -29,8 +29,17 @@ def m2(res, *args) -> (1, None) :
 
 class GaussianBeam(Function):
 
-    @ufunc()
-    def function(z, /, w0:w0=10., z0:z0=0., m2:m2=1., wl=550., n=1.) : # w0 : µm, z0 : mm, wl : nm
+    @ufunc(
+        variables=["z"],
+        parameters=[
+            Parameter("w0", 10., estimate=w0, bounds=(0, None)),
+            Parameter("z0", 0., estimate=z0),
+            Parameter("m2", 1., estimate=m2, bounds=(1, None)),
+            Parameter("wl", 550.),
+            Parameter("n", 1.),
+        ],
+    )
+    def function(z, /, w0=10., z0=0., m2=1., wl=550., n=1.) : # w0 : µm, z0 : mm, wl : nm
         return w0 * math.sqrt(1 + ((z - z0) / (math.pi * w0**2 * n / wl / m2))**2)
     
     

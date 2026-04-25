@@ -11,7 +11,7 @@
 import numpy as np
 import scipy.special as sc
 import math
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 gausfunc, get_mean, get_std, get_amp, get_offset, correct_angle = rfrom("._gaussians", "gausfunc", "get_mean", "get_std", "get_amp", "get_offset", "correct_angle")
 
@@ -19,25 +19,39 @@ gausfunc, get_mean, get_std, get_amp, get_offset, correct_angle = rfrom("._gauss
 
 # %% Parameters
 
-def mux(res, *vars) -> (None, None) :
+def mux(res, *vars) :
     return get_mean(res, vars[0])
-def muy(res, *vars) -> (None, None) :
+def muy(res, *vars) :
     return get_mean(res, vars[1])
-def sigx(res, *vars) -> (0, None) :
+def sigx(res, *vars) :
     return get_std(res, vars[0])
-def sigy(res, *vars) -> (0, None) :
+def sigy(res, *vars) :
     return get_std(res, vars[1])
-def amp(res, *vars) -> (None, None) :
+def amp(res, *vars) :
     return get_amp(res)
-def offset(res, *vars) -> (None, None) :
+def offset(res, *vars) :
     return get_offset(res)
 
 # %% Function
 
 class Gaussian2D(Function):
 
-    @ufunc()
-    def function(x, y, /, mux:mux=0., muy:muy=0., sigx:sigx=1/(2*np.pi), sigy:sigy=1/(2*np.pi), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., nsig=-1., theta=0.) :
+    @ufunc(
+        variables=["x", "y"],
+        parameters=[
+            Parameter("mux", 0., estimate=mux),
+            Parameter("muy", 0., estimate=muy),
+            Parameter("sigx", 1/(2*np.pi), estimate=sigx, bounds=(0, None)),
+            Parameter("sigy", 1/(2*np.pi), estimate=sigy, bounds=(0, None)),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("pixx", -1.),
+            Parameter("pixy", -1.),
+            Parameter("nsig", -1.),
+            Parameter("theta", 0.),
+        ],
+    )
+    def function(x, y, /, mux=0., muy=0., sigx=1/(2*np.pi), sigy=1/(2*np.pi), amp=1., offset=0., pixx=-1., pixy=-1., nsig=-1., theta=0.) :
         x, y, mux, muy = correct_angle(theta, x, y, mux, muy)
         return amp * gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) + offset
     

@@ -10,7 +10,7 @@
 # %% Libraries
 import numpy as np
 import math
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 get_r, get_amp, get_offset, get_mean = rfrom("._masks", "get_r", "get_amp", "get_offset", "get_mean")
 
@@ -18,15 +18,15 @@ get_r, get_amp, get_offset, get_mean = rfrom("._masks", "get_r", "get_amp", "get
 
 # %% Parameters
 
-def r(res, *args) -> (0, None) :
+def r(res, *args) :
     return get_r(res, args[0])
-def mux(res, *args) -> (None, None) :
+def mux(res, *args) :
     return get_mean(res, args[0])
-def muy(res, *args) -> (None, None) :
+def muy(res, *args) :
     return get_mean(res, args[1])
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -35,8 +35,17 @@ def offset(res, *args) -> (None, None) :
 
 class Disc(Function):
 
-    @ufunc()
-    def function(x, y, /, r:r=1., mux:mux=0., muy:muy=0., amp:amp=1., offset:offset=0.) :
+    @ufunc(
+        variables=["x", "y"],
+        parameters=[
+            Parameter("r", 1., estimate=r, bounds=(0, None)),
+            Parameter("mux", 0., estimate=mux),
+            Parameter("muy", 0., estimate=muy),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+        ],
+    )
+    def function(x, y, /, r=1., mux=0., muy=0., amp=1., offset=0.) :
         return amp * (math.sqrt((x-mux)**2 + (y-muy)**2) <= r) + offset
     
     

@@ -11,7 +11,7 @@
 import numpy as np
 import scipy.special as sc
 import math
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 gausfunc, get_mean, get_std, get_amp, get_offset, correct_angle = rfrom("._gaussians", "gausfunc", "get_mean", "get_std", "get_amp", "get_offset", "correct_angle")
 
@@ -19,23 +19,35 @@ gausfunc, get_mean, get_std, get_amp, get_offset, correct_angle = rfrom("._gauss
 
 # %% Parameters
 
-def mux(res, *args) -> (None, None) :
+def mux(res, *args) :
     return get_mean(res, args[0])
-def muy(res, *args) -> (None, None) :
+def muy(res, *args) :
     return get_mean(res, args[1])
-def sig(res, *args) -> (1e-12, None) :
+def sig(res, *args) :
     return np.sqrt(get_std(res, args[0]) * get_std(res, args[1]))
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 # %% Function
 
 class IsoGaussian(Function):
 
-    @ufunc()
-    def function(x, y, /, mux:mux=0., muy:muy=0., sig:sig=1/(2*np.pi), amp:amp=1., offset:offset=0., pixx=-1., pixy=-1., nsig=-1.) :
+    @ufunc(
+        variables=["x", "y"],
+        parameters=[
+            Parameter("mux", 0., estimate=mux),
+            Parameter("muy", 0., estimate=muy),
+            Parameter("sig", 1/(2*np.pi), estimate=sig, bounds=(1e-12, None)),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("pixx", -1.),
+            Parameter("pixy", -1.),
+            Parameter("nsig", -1.),
+        ],
+    )
+    def function(x, y, /, mux=0., muy=0., sig=1/(2*np.pi), amp=1., offset=0., pixx=-1., pixy=-1., nsig=-1.) :
         return amp * gausfunc(x, mux, sig, 1, 0, pixx, nsig) * gausfunc(y, muy, sig, 1, 0, pixy, nsig) + offset
     
     

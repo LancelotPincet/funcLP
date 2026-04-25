@@ -9,19 +9,19 @@
 
 # %% Libraries
 import numpy as np
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 
 
 
 # %% Parameters
 
-def a(res, *args) -> (None, None) :
+def a(res, *args) :
     return 1
-def b(res, *args) -> (None, None) :
+def b(res, *args) :
     return 0
-def c(res, *args) -> (None, None) :
+def c(res, *args) :
     return 0
-def d(res, *args) -> (None, None) :
+def d(res, *args) :
     return 0
 
 
@@ -30,24 +30,32 @@ def d(res, *args) -> (None, None) :
 
 class Polynomial3(Function):
 
-    @ufunc()
-    def function(x, /, a:a=1., b:b=0., c:c=0., d:d=0.) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("a", 1., estimate=a),
+            Parameter("b", 0., estimate=b),
+            Parameter("c", 0., estimate=c),
+            Parameter("d", 0., estimate=d),
+        ],
+    )
+    def function(x, /, a=1., b=0., c=0., d=0.) :
         return a * x**3 + b * x**2 + c * x + d
     
     
 
     # Parameters derivatives
     @ufunc()
-    def d_a(x, /, a, b) :
+    def d_a(x, /, a, b, c, d) :
         return x**3
     @ufunc()
-    def d_b(x, /, a, b) :
+    def d_b(x, /, a, b, c, d) :
         return x**2
     @ufunc()
-    def d_c(x, /, a, b) :
+    def d_c(x, /, a, b, c, d) :
         return x
     @ufunc()
-    def d_d(x, /, a, b) :
+    def d_d(x, /, a, b, c, d) :
         return 1
 
 

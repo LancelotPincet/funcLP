@@ -10,7 +10,7 @@
 # %% Libraries
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, LSQBivariateSpline, InterpolatedUnivariateSpline
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 bspline3d, bspline3d_dx, bspline3d_dy, bspline3d_dz, get_mean, get_amp, get_offset = rfrom("._splines", "bspline3d", "bspline3d_dx", "bspline3d_dy", "bspline3d_dz", "get_mean", "get_amp", "get_offset")
 bspline3d, get_mean, get_amp, get_offset = rfrom("._splines", "bspline3d", "get_mean", "get_amp", "get_offset")
@@ -19,15 +19,15 @@ bspline3d, get_mean, get_amp, get_offset = rfrom("._splines", "bspline3d", "get_
 
 # %% Parameters
 
-def mux(res, *vars) -> (None, None) :
+def mux(res, *vars) :
     return get_mean(res, vars[0])
-def muy(res, *vars) -> (None, None) :
+def muy(res, *vars) :
     return get_mean(res, vars[1])
-def muz(res, *vars) -> (None, None) :
+def muz(res, *vars) :
     return get_mean(res, vars[2])
-def amp(res, *vars) -> (None, None) :
+def amp(res, *vars) :
     return get_amp(res)
-def offset(res, *vars) -> (None, None) :
+def offset(res, *vars) :
     return get_offset(res)
 
 # %% Function
@@ -87,8 +87,21 @@ class Spline3D(Function):
 
         super().__init__(kx=kx, ky=ky, kz=kz, tx=tx, ty=ty, tz=tz, coeffs=coeffs)
 
-    @ufunc(constants=["tx", "ty", "tz", "coeffs"])
-    def function(x, y, z, /, mux:mux=0., muy:muy=0., muz:muz=0., amp:amp=1., offset:offset=0., kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None) :
+    @ufunc(
+        variables=["x", "y", "z"],
+        parameters=[
+            Parameter("mux", 0., estimate=mux),
+            Parameter("muy", 0., estimate=muy),
+            Parameter("muz", 0., estimate=muz),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("kx", 3),
+            Parameter("ky", 3),
+            Parameter("kz", 3),
+        ],
+        constants=["tx", "ty", "tz", "coeffs"],
+    )
+    def function(x, y, z, /, mux=0., muy=0., muz=0., amp=1., offset=0., kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None) :
         return amp * bspline3d(tx, ty, tz, coeffs, kx, ky, kz, x-mux, y-muy, z-muz) + offset
     
     @ufunc(constants=["tx", "ty", "tz", "coeffs"])

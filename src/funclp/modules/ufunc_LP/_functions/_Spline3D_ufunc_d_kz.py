@@ -1,8 +1,8 @@
 
 from ._Spline3D_cpukernel_function import _Spline3D_cpukernel_function as kernel
-from funclp import ufunc
+from funclp import Parameter, ufunc
 import math
-@ufunc(data=[], constants=['tx', 'ty', 'tz', 'coeffs'], fastmath=False)
+@ufunc(variables=['x', 'y', 'z'], data=[], parameters=[Parameter('mux', 0.0), Parameter('muy', 0.0), Parameter('muz', 0.0), Parameter('amp', 1.0), Parameter('offset', 0.0), Parameter('kx', 3), Parameter('ky', 3), Parameter('kz', 3)], constants=['tx', 'ty', 'tz', 'coeffs'], fastmath=False)
 def d_kz(x, y, z, /, mux, muy, muz, amp, offset, kx, ky, kz, tx, ty, tz, coeffs):
     eps = 1e-3 * max(1.0, abs(kz))
     f_plus = kernel(x, y, z, mux, muy, muz, amp, offset, kx, ky, kz + eps, tx, ty, tz, coeffs)

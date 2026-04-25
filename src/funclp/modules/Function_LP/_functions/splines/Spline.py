@@ -10,7 +10,7 @@
 # %% Libraries
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 bspline1d, bspline1d_dx, get_mean, get_amp, get_offset = rfrom("._splines", "bspline1d", "bspline1d_dx", "get_mean", "get_amp", "get_offset")
 
@@ -18,11 +18,11 @@ bspline1d, bspline1d_dx, get_mean, get_amp, get_offset = rfrom("._splines", "bsp
 
 # %% Parameters
 
-def mu(res, *vars) -> (None, None) :
+def mu(res, *vars) :
     return get_mean(res, vars[0])
-def amp(res, *vars) -> (None, None) :
+def amp(res, *vars) :
     return get_amp(res)
-def offset(res, *vars) -> (None, None) :
+def offset(res, *vars) :
     return get_offset(res)
 
 # %% Function
@@ -53,8 +53,17 @@ class Spline(Function):
 
         super().__init__(k=k, t=t, coeffs=coeffs)
 
-    @ufunc(constants=["t", "coeffs"])
-    def function(x, /, mu:mu=0., amp:amp=1., offset:offset=0., k=3, t=None, coeffs=None) :
+    @ufunc(
+        variables=["x"],
+        parameters=[
+            Parameter("mu", 0., estimate=mu),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+            Parameter("k", 3),
+        ],
+        constants=["t", "coeffs"],
+    )
+    def function(x, /, mu=0., amp=1., offset=0., k=3, t=None, coeffs=None) :
         return amp * bspline1d(t, coeffs, k, x-mu) + offset
     
     @ufunc(constants=["t", "coeffs"])

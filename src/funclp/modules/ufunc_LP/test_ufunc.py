@@ -16,7 +16,7 @@ ufunc : Decorator class defining universal function factory object from python k
 
 # %% Libraries
 from corelp import debug
-from funclp import ufunc
+from funclp import Parameter, ufunc
 from time import perf_counter
 import numpy as np
 import warnings
@@ -38,13 +38,13 @@ def test_args() :
         warnings.simplefilter("ignore", category=NumbaPerformanceWarning)
 
         class MyClass() :
-            @ufunc() # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(variables=['x', 'y'], parameters=[Parameter('a', 1), Parameter('b', 1)]) # <-- HERE IS THE DECORATOR TO USE
             def nodata(x, y, /, a, b=1) :
                 return a * x + b * y
-            @ufunc(data=['constant']) # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(variables=[], data=['constant'], parameters=[Parameter('a', 1), Parameter('b', 1)]) # <-- HERE IS THE DECORATOR TO USE
             def novar(constant, /, a, b=1) :
                 return a + b + constant
-            @ufunc(data=['constant']) # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(variables=['x', 'y'], data=['constant'], parameters=[]) # <-- HERE IS THE DECORATOR TO USE
             def nopar(x, y, constant=1, /) :
                 return x + y + constant
             cuda = False
@@ -77,7 +77,7 @@ def test_func() :
         warnings.simplefilter("ignore", category=NumbaPerformanceWarning)
 
         class MyClass() :
-            @ufunc(data=['constant']) # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(variables=['x', 'y'], data=['constant'], parameters=[Parameter('a', 1), Parameter('b', 0)]) # <-- HERE IS THE DECORATOR TO USE
             def myfunc(x, y, constant, /, a, b=0) :
                 return a * x + b * y + constant
             cuda = False
@@ -127,10 +127,10 @@ def test_main() :
         warnings.simplefilter("ignore", category=NumbaPerformanceWarning)
 
         class MyClass() :
-            @ufunc(main=True, data=['constant']) # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(main=True, variables=['x', 'y'], data=['constant'], parameters=[Parameter('a', 1), Parameter('b', 1)]) # <-- HERE IS THE DECORATOR TO USE
             def myfunc(x, y, constant, /, a=1, b=1) :
                 return a * x + b * y + constant
-            @ufunc()
+            @ufunc(variables=['x'], parameters=[Parameter('a', 1)])
             def otherfunc(x, /, a=1) :
                 return x + a
             cuda = False
@@ -180,7 +180,7 @@ def test_stack() :
         warnings.simplefilter("ignore", category=NumbaPerformanceWarning)
 
         class MyClass() :
-            @ufunc(data=['constant']) # <-- HERE IS THE DECORATOR TO USE
+            @ufunc(variables=['x', 'y'], data=['constant'], parameters=[Parameter('a', 1), Parameter('b', 1)]) # <-- HERE IS THE DECORATOR TO USE
             def myfunc(x, y, constant, /, a, b=1) :
                 return a * x + b * y + constant
             cuda = False

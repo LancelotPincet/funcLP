@@ -9,7 +9,8 @@
 
 # %% Libraries
 import math
-from funclp import Function, ufunc
+import numpy as np
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "get_offset")
 
@@ -17,11 +18,11 @@ get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "ge
 
 # %% Parameters
 
-def tau(res, *args) -> (None, None) :
+def tau(res, *args) :
     return get_tau(res, args[0])
-def amp(res, *args) -> (None, None) :
+def amp(res, *args) :
     return get_amp(res)
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -30,8 +31,15 @@ def offset(res, *args) -> (None, None) :
 
 class Exponential1(Function):
 
-    @ufunc()
-    def function(t, /, tau:tau=1., amp:amp=1., offset:offset=0.) :
+    @ufunc(
+        variables=["t"],
+        parameters=[
+            Parameter("tau", 1., estimate=tau),
+            Parameter("amp", 1., estimate=amp),
+            Parameter("offset", 0., estimate=offset),
+        ],
+    )
+    def function(t, /, tau=1., amp=1., offset=0.) :
         return amp * math.exp(-t / tau) + offset
     
     

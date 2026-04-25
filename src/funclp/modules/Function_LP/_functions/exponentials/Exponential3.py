@@ -9,7 +9,8 @@
 
 # %% Libraries
 import math
-from funclp import Function, ufunc
+import numpy as np
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "get_offset")
 
@@ -17,23 +18,23 @@ get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "ge
 
 # %% Parameters
 
-def tau1(res, *args) -> (None, None) :
+def tau1(res, *args) :
     n1 = int(len(res) / 3) + 1
     return get_tau(res[:n1], args[0][:n1])
-def tau2(res, *args) -> (None, None) :
+def tau2(res, *args) :
     n1 = int(len(res) / 3) + 1
     n2 = int(len(res) / 3) * 2 + 1
     return get_tau(res[n1:n2], args[0][n1:n2])
-def tau3(res, *args) -> (None, None) :
+def tau3(res, *args) :
     n2 = int(len(res) / 3) * 2 + 1
     return get_tau(res[n2:], args[0][n2:])
-def amp1(res, *args) -> (None, None) :
+def amp1(res, *args) :
     return get_amp(res) / 3
-def amp2(res, *args) -> (None, None) :
+def amp2(res, *args) :
     return get_amp(res) / 3
-def amp3(res, *args) -> (None, None) :
+def amp3(res, *args) :
     return get_amp(res) / 3
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -42,8 +43,19 @@ def offset(res, *args) -> (None, None) :
 
 class Exponential3(Function):
 
-    @ufunc()
-    def function(t, /, tau1:tau1=1., tau2:tau2=2/3, tau3:tau3=1/3, amp1:amp1=1/3, amp2:amp2=1/3, amp3:amp3=1/3, offset:offset=0.) :
+    @ufunc(
+        variables=["t"],
+        parameters=[
+            Parameter("tau1", 1., estimate=tau1),
+            Parameter("tau2", 2/3, estimate=tau2),
+            Parameter("tau3", 1/3, estimate=tau3),
+            Parameter("amp1", 1/3, estimate=amp1),
+            Parameter("amp2", 1/3, estimate=amp2),
+            Parameter("amp3", 1/3, estimate=amp3),
+            Parameter("offset", 0., estimate=offset),
+        ],
+    )
+    def function(t, /, tau1=1., tau2=2/3, tau3=1/3, amp1=1/3, amp2=1/3, amp3=1/3, offset=0.) :
         return amp1 * math.exp(-t / tau1) + amp2 * math.exp(-t / tau2) + amp3 * math.exp(-t / tau3) + offset
     
     

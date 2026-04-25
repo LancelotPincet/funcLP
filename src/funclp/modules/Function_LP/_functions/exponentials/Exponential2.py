@@ -9,7 +9,8 @@
 
 # %% Libraries
 import math
-from funclp import Function, ufunc
+import numpy as np
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "get_offset")
 
@@ -17,17 +18,17 @@ get_tau, get_amp, get_offset = rfrom("._exponentials", "get_tau", "get_amp", "ge
 
 # %% Parameters
 
-def tau1(res, *args) -> (None, None) :
+def tau1(res, *args) :
     n = int(len(res) / 2) + 1
     return get_tau(res[:n], args[0][:n])
-def tau2(res, *args) -> (None, None) :
+def tau2(res, *args) :
     n = int(len(res) / 2) + 1
     return get_tau(res[n:], args[0][n:])
-def amp1(res, *args) -> (None, None) :
+def amp1(res, *args) :
     return get_amp(res) / 2
-def amp2(res, *args) -> (None, None) :
+def amp2(res, *args) :
     return get_amp(res) / 2
-def offset(res, *args) -> (None, None) :
+def offset(res, *args) :
     return get_offset(res)
 
 
@@ -36,8 +37,17 @@ def offset(res, *args) -> (None, None) :
 
 class Exponential2(Function):
 
-    @ufunc()
-    def function(t, /, tau1:tau1=1., tau2:tau2=1/2, amp1:amp1=1/2, amp2:amp2=1/2, offset:offset=0.) :
+    @ufunc(
+        variables=["t"],
+        parameters=[
+            Parameter("tau1", 1., estimate=tau1),
+            Parameter("tau2", 1/2, estimate=tau2),
+            Parameter("amp1", 1/2, estimate=amp1),
+            Parameter("amp2", 1/2, estimate=amp2),
+            Parameter("offset", 0., estimate=offset),
+        ],
+    )
+    def function(t, /, tau1=1., tau2=1/2, amp1=1/2, amp2=1/2, offset=0.) :
         return amp1 * math.exp(-t / tau1) + amp2 * math.exp(-t / tau2) + offset
     
     

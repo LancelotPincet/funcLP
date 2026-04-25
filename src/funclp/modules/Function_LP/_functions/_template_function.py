@@ -8,7 +8,7 @@
 
 
 # %% Libraries
-from funclp import Function, ufunc
+from funclp import Function, Parameter, ufunc
 from corelp import rfrom
 func1, func2 = rfrom("._file", "func1", "func2")
 
@@ -16,7 +16,7 @@ func1, func2 = rfrom("._file", "func1", "func2")
 
 # %% Parameters
 
-def myparam(res, *args) -> (None, None) :
+def myparam(res, *args) :
     return func1(res, *args)
 
 
@@ -25,15 +25,18 @@ def myparam(res, *args) -> (None, None) :
 
 class MyFunc(Function):
 
-    @ufunc(main=True)
-    def function(variable, /, parameter) :
+    @ufunc(
+        variables=["variable"],
+        parameters=[Parameter("parameter", 0., estimate=myparam)],
+    )
+    def function(variable, /, parameter=0.) :
         return None
     
     
 
     # Parameters derivatives
     @ufunc()
-    def d_parameter(variable, /, datum, *, parameter) :
+    def d_parameter(variable, /, parameter=0.) :
         return None
 
 
