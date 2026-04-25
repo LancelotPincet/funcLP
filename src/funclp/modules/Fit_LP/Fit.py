@@ -107,7 +107,12 @@ class Fit(ABC, CudaReference) :
 
         # Start
         cache_cuda = self.cuda
-        inputs = use_inputs(self.function.__class__.function, args, self.function.parameters) # variables, data, parameters
+        if hasattr(self.function, 'prepare_fit_inputs'):
+            raw_data, args, weights = self.function.prepare_fit_inputs(raw_data, args, weights)
+            fit_ufunc = self.function.fit_ufunc
+        else:
+            fit_ufunc = self.function.__class__.function
+        inputs = use_inputs(fit_ufunc, args, self.function.parameters) # variables, data, parameters
         (nomodel, nopoint), (self.nmodels, self.npoints), in_shapes = use_shapes(*inputs) # (nomodel, nopoint), (nmodels, npoints), (variables_shapes, data_shapes, parameters_shapes)
         self.cuda, self.xp, transfer_back, blocks_per_grid, threads_per_block = use_cuda(self.function, (self.nmodels, self.npoints), inputs)
         self.variables, self.data, self.parameters, self.dtype = use_broadcasting(self.xp, *inputs, *in_shapes, (self.nmodels, self.npoints))

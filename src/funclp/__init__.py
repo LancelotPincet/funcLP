@@ -33,6 +33,8 @@ sources = {
 'MLE': 'funclp.modules.Estimator_LP._functions.MLE',
 'LM': 'funclp.modules.Fit_LP._functions.LM',
 'Parameter': 'funclp.modules.Function_LP._functions.Parameter',
+'JointChannel': 'funclp.modules.Function_LP._functions.joints.JointFunction',
+'JointFunction': 'funclp.modules.Function_LP._functions.joints.JointFunction',
 'Diamond': 'funclp.modules.Function_LP._functions.masks.Diamond',
 'Rectangle': 'funclp.modules.Function_LP._functions.masks.Rectangle',
 'Disc': 'funclp.modules.Function_LP._functions.masks.Disc',
