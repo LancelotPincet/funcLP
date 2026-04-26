@@ -1,0 +1,5 @@
+
+from funclp import ufunc
+import numba as nb
+from numba import cuda
+_Polynomial3_gpukernel_d_c = nb.cuda.jit(device=True, cache=True)(ufunc.main_functions["Polynomial3_d_c"])

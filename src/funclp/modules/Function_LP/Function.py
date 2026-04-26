@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import importlib
 from pathlib import Path
-cache_folder = Path(__file__).parents[1] / 'ufunc_LP/_functions'
+cache_folder = Path(__file__).parents[1] / 'ufunc_LP/_functions/cached'
 
 
 
@@ -152,7 +152,7 @@ def {dname}({main_ufunc.d_inputs}):
                 if not file.exists() or file.read_text() != string:
                     file.write_text(string)
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions._{classname}_ufunc_{dname}")
+                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_ufunc_{dname}")
                 d_ufunc = getattr(module, dname)
                 d_ufunc.__set_name__(cls, dname)
                 setattr(cls, dname, d_ufunc)
@@ -205,7 +205,7 @@ def _{classname}_cpu_jacobian({inputs}, jacobian, bool2fit, ignore) :
             func = getattr(cls, f'_cpu_jacobian', None)
             if func is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions._{classname}_cpu_jacobian")
+                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_cpu_jacobian")
                 func = getattr(module, f"_{classname}_cpu_jacobian")
                 setattr(cls, f'_cpu_jacobian', func)
             return func
@@ -241,7 +241,7 @@ def _{classname}_gpu_jacobian({inputs}, jacobian, bool2fit, ignore) :
             func = getattr(cls, f'_gpu_jacobian', None)
             if func is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions._{classname}_gpu_jacobian")
+                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_gpu_jacobian")
                 func = getattr(module, f"_{classname}_gpu_jacobian")
                 setattr(cls, f'_gpu_jacobian', func)
             return func

@@ -20,7 +20,3 @@ Here are the references to the various modules to import in **funcLP**.
    make_calculation
    plot
    ufunc
-   use_broadcasting
-   use_cuda
-   use_inputs
-   use_shapes

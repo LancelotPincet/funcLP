@@ -13,12 +13,11 @@ Decorator class defining universal function factory object from python kernel fu
 
 
 # %% Libraries
-from funclp import make_calculation
-from funclp.modules.Function_LP._functions.Parameter import Parameter
+from funclp import make_calculation, Parameter
 import inspect
 import importlib
 from pathlib import Path
-cache_folder = Path(__file__).parent / '_functions'
+cache_folder = Path(__file__).parent / '_functions/cached'
 
 
 # %% Class
