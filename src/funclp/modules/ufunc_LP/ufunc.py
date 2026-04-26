@@ -173,7 +173,7 @@ _{classname}_cpukernel_{name} = nb.njit(nogil=True, cache=True)(ufunc.main_funct
             func = getattr(cls, f'_cpukernel_{name}', None)
             if func is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions._{classname}_cpukernel_{name}")
+                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_cpukernel_{name}")
                 func = getattr(module, f"_{classname}_cpukernel_{name}")
                 setattr(cls, f'_cpukernel_{name}', func)
             return func
@@ -193,7 +193,7 @@ _{classname}_gpukernel_{name} = nb.cuda.jit(device=True, cache=True)(ufunc.main_
             func = getattr(cls, f'_gpukernel_{name}', None)
             if func is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions._{classname}_gpukernel_{name}")
+                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_gpukernel_{name}")
                 func = getattr(module, f"_{classname}_gpukernel_{name}")
                 setattr(cls, f'_gpukernel_{name}', func)
             return func
@@ -222,7 +222,7 @@ def _{classname}_cpu_{name}({self.inputs}, out, ignore) :
             func = getattr(cls, f'_cpu_{name}', None)
             if func is None:
                 importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions._{classname}_cpu_{name}")
+                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_cpu_{name}")
                 func = getattr(module, f"_{classname}_cpu_{name}")
                 setattr(cls, f'_cpu_{name}', func)
             return func
@@ -246,7 +246,7 @@ def _{classname}_gpu_{name}({self.inputs}, out, ignore) :
         def gpu(instance):
             func = getattr(cls, f'_gpu_{name}', None)
             if func is None:
-                module = importlib.import_module(f"{__package__}._functions._{classname}_gpu_{name}")
+                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_gpu_{name}")
                 func = getattr(module, f"_{classname}_gpu_{name}")
                 setattr(cls, f'_gpu_{name}', func)
             return func
