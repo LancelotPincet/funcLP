@@ -5,3 +5,11 @@ funclp.JointFunction module
    :members: 
    :show-inheritance:
    :undoc-members:
+
+Linked modules
+--------------
+
+.. toctree::
+   :maxdepth: 1
+
+   JointChannel

@@ -5,3 +5,12 @@ funclp.Estimator module
    :members: 
    :show-inheritance:
    :undoc-members:
+
+Estimators
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   LSE
+   MLE

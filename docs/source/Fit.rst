@@ -5,3 +5,11 @@ funclp.Fit module
    :members: 
    :show-inheritance:
    :undoc-members:
+
+Optimizers
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   LM
