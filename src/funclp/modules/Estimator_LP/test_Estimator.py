@@ -7,70 +7,95 @@
 # Module        : Estimator
 
 """
-This file allows to test Estimator
+Tests for the Estimator class.
 
-Estimator : Class defining an estimator function for fitting data.
+Estimator : Abstract base class for estimator functions used in fitting.
 """
 
-
-
 # %% Libraries
-from corelp import debug
 import pytest
-from funclp import Estimator
-debug_folder = debug(__file__)
+import numpy as np
+from funclp import MLE, LSE, Normal, Poisson
 
 
+class TestMLE:
+    def test_name(self):
+        estimator = MLE(Normal())
+        assert estimator.name == "MLE"
 
-# %% Function test
-def test_function() :
-    '''
-    Test Estimator function
-    '''
-    print('Hello world!')
-
-
-
-# %% Instance fixture
-@pytest.fixture()
-def instance() :
-    '''
-    Create a new instance at each test function
-    '''
-    return Estimator()
-
-def test_instance(instance) :
-    '''
-    Test on fixture
-    '''
-    pass
+    def test_distribution_set(self):
+        dist = Normal()
+        estimator = MLE(dist)
+        assert estimator.distribution is dist
 
 
-# %% Returns test
-@pytest.mark.parametrize("args, kwargs, expected, message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_returns(args, kwargs, expected, message) :
-    '''
-    Test Estimator return values
-    '''
-    assert Estimator(*args, **kwargs) == expected, message
+class TestLSE:
+    def test_name(self):
+        estimator = LSE()
+        assert estimator.name == "LSE"
+
+    def test_automatic_normal_distribution(self):
+        estimator = LSE()
+        assert estimator.distribution is not None
+        assert estimator.distribution.__class__.__name__ == "Normal"
+
+    def test_distribution_not_allowed(self):
+        with pytest.raises(SyntaxError):
+            _ = LSE(Normal())
 
 
+class TestMLEWithNormal:
+    @pytest.fixture
+    def estimator(self):
+        return MLE(Normal())
 
-# %% Error test
-@pytest.mark.parametrize("args, kwargs, error, error_message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_errors(args, kwargs, error, error_message) :
-    '''
-    Test Estimator error values
-    '''
-    with pytest.raises(error, match=error_message) :
-        Estimator(*args, **kwargs)
+    def test_deviance(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.deviance(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
 
+    def test_loss(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.loss(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_observed(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.observed(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_fisher(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.fisher(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+
+class TestMLEWithPoisson:
+    @pytest.fixture
+    def estimator(self):
+        return MLE(Poisson())
+
+    def test_deviance(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.deviance(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_loss(self, estimator):
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = estimator.loss(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
 
 
 # %% Test function run

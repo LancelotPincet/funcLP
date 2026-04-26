@@ -7,70 +7,49 @@
 # Module        : CudaReference
 
 """
-This file allows to test CudaReference
+Tests for the CudaReference class.
 
-CudaReference : This class serves as a parent class and gives parameters defining cuda usage.
+CudaReference : Base class that provides parameters defining CUDA usage.
 """
 
-
-
 # %% Libraries
-from corelp import debug
 import pytest
-from funclp import CudaReference
-debug_folder = debug(__file__)
+import numpy as np
+from funclp import CudaReference, IsoGaussian
 
 
+class TestCudaReference:
+    def test_name(self):
+        ref = CudaReference()
+        assert ref.name == "CudaReference"
 
-# %% Function test
-def test_function() :
-    '''
-    Test CudaReference function
-    '''
-    print('Hello world!')
+    def test_default_cuda_none(self):
+        ref = CudaReference()
+        assert ref.cuda is None
 
-
-
-# %% Instance fixture
-@pytest.fixture()
-def instance() :
-    '''
-    Create a new instance at each test function
-    '''
-    return CudaReference()
-
-def test_instance(instance) :
-    '''
-    Test on fixture
-    '''
-    pass
+    def test_default_cpu2gpu(self):
+        ref = CudaReference()
+        assert ref.cpu2gpu == 1e6
 
 
-# %% Returns test
-@pytest.mark.parametrize("args, kwargs, expected, message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_returns(args, kwargs, expected, message) :
-    '''
-    Test CudaReference return values
-    '''
-    assert CudaReference(*args, **kwargs) == expected, message
+class TestCudaReferenceInheritance:
+    def test_inherits_from(self):
+        func = IsoGaussian()
+        assert isinstance(func, CudaReference)
+
+    def test_cuda_reference_chain(self):
+        func = IsoGaussian()
+        assert func.cuda_reference is not None
 
 
+class TestCudaReferenceAttributes:
+    def test_can_set_cuda(self):
+        func = IsoGaussian(cuda=False)
+        assert func.cuda is False
 
-# %% Error test
-@pytest.mark.parametrize("args, kwargs, error, error_message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_errors(args, kwargs, error, error_message) :
-    '''
-    Test CudaReference error values
-    '''
-    with pytest.raises(error, match=error_message) :
-        CudaReference(*args, **kwargs)
-
+    def test_can_set_cpu2gpu(self):
+        func = IsoGaussian(cpu2gpu=1e3)
+        assert func.cpu2gpu == 1e3
 
 
 # %% Test function run

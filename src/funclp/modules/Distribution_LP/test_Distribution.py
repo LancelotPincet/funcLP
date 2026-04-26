@@ -7,70 +7,143 @@
 # Module        : Distribution
 
 """
-This file allows to test Distribution
+Tests for the Distribution class.
 
-Distribution : Class defining the noise distribution in data.
+Distribution : Abstract base class for noise distributions in data.
 """
 
-
-
 # %% Libraries
-from corelp import debug
 import pytest
-from funclp import Distribution
-debug_folder = debug(__file__)
+import numpy as np
+from funclp import Normal, Poisson, Binomial, Gamma
 
 
+class TestNormal:
+    def test_name(self):
+        dist = Normal()
+        assert dist.name == "Normal"
 
-# %% Function test
-def test_function() :
-    '''
-    Test Distribution function
-    '''
-    print('Hello world!')
+    def test_pdf(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.pdf(raw, model, weights)
+        assert result > 0
+
+    def test_loglikelihood_reduced(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.loglikelihood_reduced(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_loglikelihood(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.loglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_dloglikelihood(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.dloglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_d2loglikelihood(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.d2loglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_fisher(self):
+        dist = Normal()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.fisher(raw, model, weights)
+        assert result > 0
 
 
+class TestPoisson:
+    def test_name(self):
+        dist = Poisson()
+        assert dist.name == "Poisson"
 
-# %% Instance fixture
-@pytest.fixture()
-def instance() :
-    '''
-    Create a new instance at each test function
-    '''
-    return Distribution()
+    def test_pdf(self):
+        dist = Poisson()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.pdf(raw, model, weights)
+        assert result >= 0
 
-def test_instance(instance) :
-    '''
-    Test on fixture
-    '''
-    pass
+    def test_loglikelihood(self):
+        dist = Poisson()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.loglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_dloglikelihood(self):
+        dist = Poisson()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.dloglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_d2loglikelihood(self):
+        dist = Poisson()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.d2loglikelihood(raw, model, weights)
+        assert isinstance(result, (float, np.floating))
+
+    def test_fisher(self):
+        dist = Poisson()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.fisher(raw, model, weights)
+        assert result >= 0
 
 
-# %% Returns test
-@pytest.mark.parametrize("args, kwargs, expected, message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_returns(args, kwargs, expected, message) :
-    '''
-    Test Distribution return values
-    '''
-    assert Distribution(*args, **kwargs) == expected, message
+class TestBinomial:
+    def test_name(self):
+        dist = Binomial()
+        assert dist.name == "Binomial"
+
+    def test_pdf(self):
+        dist = Binomial()
+        raw = np.float32(5.0)
+        model = np.float32(0.5)
+        weights = np.float32(1.0)
+        result = dist.pdf(raw, model, weights)
+        assert result >= 0
 
 
+class TestGamma:
+    def test_name(self):
+        dist = Gamma()
+        assert dist.name == "Gamma"
 
-# %% Error test
-@pytest.mark.parametrize("args, kwargs, error, error_message", [
-    #([], {}, None, ""),
-    ([], {}, None, ""),
-])
-def test_errors(args, kwargs, error, error_message) :
-    '''
-    Test Distribution error values
-    '''
-    with pytest.raises(error, match=error_message) :
-        Distribution(*args, **kwargs)
-
+    def test_pdf(self):
+        dist = Gamma()
+        raw = np.float32(5.0)
+        model = np.float32(4.0)
+        weights = np.float32(1.0)
+        result = dist.pdf(raw, model, weights)
+        assert result >= 0
 
 
 # %% Test function run
