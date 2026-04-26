@@ -18,6 +18,7 @@ sources = {
 'Estimator': 'funclp.modules.Estimator_LP.Estimator',
 'Fit': 'funclp.modules.Fit_LP.Fit',
 'Function': 'funclp.modules.Function_LP.Function',
+'JointFunction': 'funclp.modules.JointFunction_LP.JointFunction',
 'make_calculation': 'funclp.modules.make_calculation_LP.make_calculation',
 'plot': 'funclp.modules.plot_LP.plot',
 'ufunc': 'funclp.modules.ufunc_LP.ufunc',
@@ -33,8 +34,6 @@ sources = {
 'MLE': 'funclp.modules.Estimator_LP._functions.MLE',
 'LM': 'funclp.modules.Fit_LP._functions.LM',
 'Parameter': 'funclp.modules.Function_LP._functions.Parameter',
-'JointChannel': 'funclp.modules.Function_LP._functions.joints.JointFunction',
-'JointFunction': 'funclp.modules.Function_LP._functions.joints.JointFunction',
 'Diamond': 'funclp.modules.Function_LP._functions.masks.Diamond',
 'Rectangle': 'funclp.modules.Function_LP._functions.masks.Rectangle',
 'Disc': 'funclp.modules.Function_LP._functions.masks.Disc',
@@ -55,7 +54,8 @@ sources = {
 'Polynomial1': 'funclp.modules.Function_LP._functions.polynomials.Polynomial1',
 'Exponential1': 'funclp.modules.Function_LP._functions.exponentials.Exponential1',
 'Exponential2': 'funclp.modules.Function_LP._functions.exponentials.Exponential2',
-'Exponential3': 'funclp.modules.Function_LP._functions.exponentials.Exponential3'
+'Exponential3': 'funclp.modules.Function_LP._functions.exponentials.Exponential3',
+'JointChannel': 'funclp.modules.JointFunction_LP._functions.JointChannel'
 }
 
 

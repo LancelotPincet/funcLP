@@ -16,6 +16,7 @@ Here are the references to the various modules to import in **funcLP**.
    Estimator
    Fit
    Function
+   JointFunction
    make_calculation
    plot
    ufunc
