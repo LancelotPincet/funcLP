@@ -83,9 +83,10 @@ class Spline3D(Function):
                     sp_z = InterpolatedUnivariateSpline(z2interp, all_coeffs[:, iy, ix], k=kz)
                     coeffs_cube[:, iy, ix] = sp_z.get_coeffs()
 
-            coeffs = coeffs_cube
+            kwargs.update(dict(tx=tx, ty=ty, tz=tz, coeffs=coeffs))
 
-        super().__init__(kx=kx, ky=ky, kz=kz, tx=tx, ty=ty, tz=tz, coeffs=coeffs)
+        kwargs.update(dict(kx=kx, ky=ky, kz=kz))
+        super().__init__(**kwargs)
 
     @ufunc(
         variables=["x", "y", "z"],
