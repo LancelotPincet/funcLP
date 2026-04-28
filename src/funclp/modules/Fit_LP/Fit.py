@@ -87,10 +87,30 @@ class Fit(ABC, CudaReference) :
         return n
     @property
     def lower_bounds(self) :
-        return self.xp.asarray([getattr(self.function, f'{key}_min') for key in self.parameters2fit])
+        bounds = [self.xp.asarray(getattr(self.function, f'{key}_min')) for key in self.parameters2fit]
+        if all(bound.ndim == 0 for bound in bounds):
+            return self.xp.asarray(bounds)
+
+        normalized = []
+        for bound in bounds:
+            if bound.ndim == 0:
+                normalized.append(self.xp.full(self.nmodels, bound, dtype=self.dtype))
+            else:
+                normalized.append(bound.reshape(self.nmodels).astype(self.dtype, copy=False))
+        return self.xp.stack(normalized, axis=1)
     @property
     def upper_bounds(self) :
-        return self.xp.asarray([getattr(self.function, f'{key}_max') for key in self.parameters2fit])
+        bounds = [self.xp.asarray(getattr(self.function, f'{key}_max')) for key in self.parameters2fit]
+        if all(bound.ndim == 0 for bound in bounds):
+            return self.xp.asarray(bounds)
+
+        normalized = []
+        for bound in bounds:
+            if bound.ndim == 0:
+                normalized.append(self.xp.full(self.nmodels, bound, dtype=self.dtype))
+            else:
+                normalized.append(bound.reshape(self.nmodels).astype(self.dtype, copy=False))
+        return self.xp.stack(normalized, axis=1)
 
 
     #ABC

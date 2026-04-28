@@ -132,11 +132,13 @@ class LM(Fit) :
                 pidx = indices[p]
                 oldv = parameters[model, pidx]
                 newv = oldv + steps[model, p]
-                if newv < bounds_min[p]:
-                    newv = bounds_min[p]
+                bound_min = bounds_min[model, p] if bounds_min.ndim == 2 else bounds_min[p]
+                bound_max = bounds_max[model, p] if bounds_max.ndim == 2 else bounds_max[p]
+                if newv < bound_min:
+                    newv = bound_min
                     steps[model, p] = newv - oldv
-                elif newv > bounds_max[p]:
-                    newv = bounds_max[p]
+                elif newv > bound_max:
+                    newv = bound_max
                     steps[model, p] = newv - oldv
                 parameters[model, pidx] = newv
 
@@ -211,11 +213,13 @@ class LM(Fit) :
             pidx = indices[p]
             oldv = parameters[model, pidx]
             newv = oldv + steps[model, p]
-            if newv < bounds_min[p]:
-                newv = bounds_min[p]
+            bound_min = bounds_min[model, p] if bounds_min.ndim == 2 else bounds_min[p]
+            bound_max = bounds_max[model, p] if bounds_max.ndim == 2 else bounds_max[p]
+            if newv < bound_min:
+                newv = bound_min
                 steps[model, p] = newv - oldv
-            elif newv > bounds_max[p]:
-                newv = bounds_max[p]
+            elif newv > bound_max:
+                newv = bound_max
                 steps[model, p] = newv - oldv
             parameters[model, pidx] = newv
 
