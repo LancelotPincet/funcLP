@@ -461,7 +461,7 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
     @prop(cache=True)
     def convergence(self) :
         if not self.cuda : return self.cpu_convergence
-        threads_per_block = 128
+        threads_per_block = 32
         blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
         return self.gpu_convergence[blocks_per_grid, threads_per_block]
 

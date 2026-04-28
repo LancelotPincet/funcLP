@@ -86,6 +86,7 @@ class LM(Fit) :
             # Cholesky solve
 
             # lower-triangular part stores L
+            failed = False
             for i in range(nparams):
                 for j in range(i + 1):
                     s = hessian[model, i, j]
@@ -94,16 +95,20 @@ class LM(Fit) :
 
                     if i == j:
                         if s <= 0.0:
-                            ignore[model] = True
+                            failed = True
                             break
                         hessian[model, i, j] = math.sqrt(s)
                     else:
                         hessian[model, i, j] = s / hessian[model, j, j]
 
-                if ignore[model] :
+                if failed:
                     break
 
-            if ignore[model] :
+            # Non positive-definite Hessian: keep parameters unchanged and let
+            # the trial stage increase damping.
+            if failed:
+                for p in range(nparams):
+                    steps[model, p] = 0.0
                 continue
 
             # Fowrward substitution: L y = -g
@@ -164,6 +169,7 @@ class LM(Fit) :
         # CHOLESKY SOLVE
 
         # Lower-triangular part stores L
+        failed = False
         for i in range(nparams):
             for j in range(i + 1):
                 s = hessian[model, i, j]
@@ -171,11 +177,18 @@ class LM(Fit) :
                     s -= hessian[model, i, k] * hessian[model, j, k]
                 if i == j:
                     if s <= 0.0:
-                        ignore[model] = True
-                        return
+                        failed = True
+                        break
                     hessian[model, i, j] = math.sqrt(s)
                 else:
                     hessian[model, i, j] = s / hessian[model, j, j]
+            if failed:
+                break
+
+        if failed:
+            for p in range(nparams):
+                steps[model, p] = 0.0
+            return
 
         # Forward substitution: L y = -g
         for i in range(nparams):
@@ -211,7 +224,7 @@ class LM(Fit) :
     @property
     def damped_step(self) :
         if not self.cuda : return self.cpu_damped_step
-        threads_per_block = 128
+        threads_per_block = 32
         blocks_per_grid = (self.nmodels + threads_per_block - 1) // threads_per_block
         return self.gpu_damped_step[blocks_per_grid, threads_per_block]
 
