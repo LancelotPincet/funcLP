@@ -69,6 +69,7 @@ class Gaussian2D(Function):
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         if theta == 0 :
             return amp * exx * exy * (x - mux) / sigx**2
+        theta = theta / 180 * math.pi
         return amp * exx * exy * (math.cos(theta) * x / sigx**2 + math.sin(theta) * y / sigy**2)
     @ufunc()
     def d_muy(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :
@@ -81,6 +82,7 @@ class Gaussian2D(Function):
         exy = gausfunc(y, muy, sigy, 1, 0, pixy, nsig)
         if theta == 0 :
             return amp * exx * exy * (y - muy) / sigy**2
+        theta = theta / 180 * math.pi
         return amp * exx * exy * (-math.sin(theta) * x / sigx**2 + math.cos(theta) * y / sigy**2)
     @ufunc()
     def d_sigx(x, y, /, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta) :

@@ -155,7 +155,7 @@ class Fit(ABC, CudaReference) :
         self.gradient_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit), dtype=self.dtype) # gradient matrix
         self.hessian_data = self.xp.empty(shape=(self.nmodels, self.nparameters2fit, self.nparameters2fit), dtype=self.dtype) # hessian matrix
         self.hessian_cache = self.xp.empty_like(self.hessian_data) # hessian cache
-        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.int8) # -3: optimization fail, -2: optimization terminated and failed, -1: optimization termination to test, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
+        self.converged = self.xp.zeros(shape=self.nmodels, dtype=self.xp.int8) # -4: reserved for parameter clamped to bounds (used by downstream apps), -3: optimization fail, -2: optimization terminated and failed, -1: optimization termination to test, 0: not converged yet, 1: gtol (gradient), 2: ftol (chi2), 3: xtol (steps)
 
 
         # Initialize
