@@ -15,11 +15,9 @@ Function class defining a function model.
 # %% Libraries
 from corelp import prop, selfkwargs
 from funclp import CudaReference
+from funclp.modules.kernel_caching_LP.kernel_caching import kernel_caching
 from abc import ABC, abstractmethod
 import numpy as np
-import importlib
-from pathlib import Path
-cache_folder = Path(__file__).parents[1] / 'ufunc_LP/_functions/cached'
 
 
 
@@ -127,7 +125,7 @@ class Function(ABC, CudaReference) :
             # derivative default
             dname = f'd_{pname}'
             if dname not in cls.__dict__:
-                file = cache_folder / f'_{classname}_ufunc_{dname}.py'
+                module_name = f'_{classname}_ufunc_{dname}'
                 inputs_plus = main_ufunc.inputs.replace(pname, f'{pname} + eps')
                 inputs_minus = main_ufunc.inputs.replace(pname, f'{pname} - eps')
                 parameters = ', '.join([parameter_code(main_ufunc.parameter_specs[key]) for key in main_ufunc.parameters])
@@ -149,11 +147,7 @@ def {dname}({main_ufunc.d_inputs}):
         return (f_x - f_minus) / eps
     return math.nan
 '''
-                if not file.exists() or file.read_text() != string:
-                    file.write_text(string)
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_ufunc_{dname}")
-                d_ufunc = getattr(module, dname)
+                d_ufunc = kernel_caching(module_name, string, object_name=dname)
                 d_ufunc.__set_name__(cls, dname)
                 setattr(cls, dname, d_ufunc)
 
@@ -176,7 +170,7 @@ def {dname}({main_ufunc.d_inputs}):
                 setattr(cls, f'{pname}_max', maxi)
 
         # CPU Jacobian
-        file = cache_folder / f'_{classname}_cpu_jacobian.py'
+        module_name = f'_{classname}_cpu_jacobian'
         inputs = ', '.join(main_ufunc.variables + main_ufunc.data + main_ufunc.parameters + main_ufunc.constants)
         indexes = ', '.join([f'{key}[point]' for key in main_ufunc.variables] + [f'{key}[model, point]' for key in main_ufunc.data] + [f'{key}[model]' for key in main_ufunc.parameters] + [key for key in main_ufunc.constants])
         string = ''
@@ -198,21 +192,27 @@ def _{classname}_cpu_jacobian({inputs}, jacobian, bool2fit, ignore) :
                 jacobian[model, point, count] = d_{pname}({indexes})
                 count += 1
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def cpu(instance):
+        def cpu(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_cpu_jacobian",
+        ):
             func = getattr(cls, f'_cpu_jacobian', None)
             if func is None:
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_cpu_jacobian")
-                func = getattr(module, f"_{classname}_cpu_jacobian")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_cpu_jacobian', func)
             return func
         setattr(cls, f'cpu_jacobian', cpu)
 
         # GPU Jacobian
-        file = cache_folder / f'_{classname}_gpu_jacobian.py'
+        module_name = f'_{classname}_gpu_jacobian'
         inputs = ', '.join(main_ufunc.variables + main_ufunc.data + main_ufunc.parameters + main_ufunc.constants)
         indexes = ', '.join([f'{key}[point]' for key in main_ufunc.variables] + [f'{key}[model, point]' for key in main_ufunc.data] + [f'{key}[model]' for key in main_ufunc.parameters] + [key for key in main_ufunc.constants])
         string = ''
@@ -234,15 +234,21 @@ def _{classname}_gpu_jacobian({inputs}, jacobian, bool2fit, ignore) :
             jacobian[model, point, count] = d_{pname}({indexes})
             count += 1
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def gpu(instance):
+        def gpu(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_gpu_jacobian",
+        ):
             func = getattr(cls, f'_gpu_jacobian', None)
             if func is None:
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"funclp.modules.ufunc_LP._functions.cached._{classname}_gpu_jacobian")
-                func = getattr(module, f"_{classname}_gpu_jacobian")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_gpu_jacobian', func)
             return func
         setattr(cls, f'gpu_jacobian', gpu)

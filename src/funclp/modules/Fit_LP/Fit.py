@@ -14,7 +14,7 @@ Class defining fitting algorithms.
 
 # %% Libraries
 from corelp import prop, selfkwargs
-from funclp import CudaReference, use_inputs, use_shapes, use_cuda, use_broadcasting
+from funclp import CudaReference, use_inputs, use_shapes, use_cuda, use_broadcasting, kernel_caching
 from abc import ABC, abstractmethod
 import numpy as np
 import numba as nb
@@ -192,21 +192,70 @@ class Fit(ABC, CudaReference) :
 
     # chi2, gradient, hessian
 
-    @prop(cache=True)
-    def cpu_assembly(self):
+    @property
+    def _fit_cache_suffix(self):
+        """Stable cache suffix based on function and estimator classes."""
+        function_name = self.function.__class__.__name__
+        estimator_name = self.estimator.__class__.__name__
+        distribution = getattr(self.estimator, "distribution", None)
+        distribution_name = distribution.__class__.__name__ if distribution is not None else "None"
+        return function_name, estimator_name, distribution_name
+
+    def _cpu_assembly_source(self):
+        """Build source code for cached CPU assembly kernel."""
+        function_name, estimator_name, distribution_name = self._fit_cache_suffix
         variables = [key for key in self.function.variables]
         data = [key for key in self.function.data]
         parameters = [key for key in self.function.parameters.keys()]
         constants = [key for key in self.function.constants]
         inputs = ', '.join(variables + data + parameters + constants)
-        inputs_scalar = ', '.join([f'point_{key}' for key in variables] + [f'point_{key}' for key in data] + [f'model_{key}' for key in parameters] + constants)
+        inputs_scalar = ', '.join(
+            [f'point_{key}' for key in variables]
+            + [f'point_{key}' for key in data]
+            + [f'model_{key}' for key in parameters]
+            + constants
+        )
         point_variables = '\n            '.join([f'point_{key} = {key}[point]' for key in variables])
         point_data = '\n            '.join([f'point_{key} = {key}[model, point]' for key in data])
         model_params = '\n        '.join([f'model_{key} = {key}[model]' for key in parameters])
-        derivatives = '\n'.join([f'''            if bool2fit[{pos}]: \n                jacob_local[count] = d_{key}({inputs_scalar})\n                count += 1''' for pos, key in enumerate(parameters)])
-        string = f'''
-@nb.njit(parallel=True, nogil=True, fastmath=True)
-def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore):
+        derivatives = '\n'.join([
+            f'''            if bool2fit[{pos}]:
+                jacob_local[count] = d_{key}({inputs_scalar})
+                count += 1'''
+            for pos, key in enumerate(parameters)
+        ])
+
+        imports = [
+            "import numpy as np",
+            "import numba as nb",
+            (
+                f"from ._{function_name}_cpukernel_function import "
+                f"_{function_name}_cpukernel_function as model_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_cpukernel_deviance "
+                f"import _{estimator_name}_{distribution_name}_cpukernel_deviance as deviance_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_cpukernel_loss "
+                f"import _{estimator_name}_{distribution_name}_cpukernel_loss as loss_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_cpukernel_fisher "
+                f"import _{estimator_name}_{distribution_name}_cpukernel_fisher as fisher_scalar"
+            ),
+        ]
+        for key in parameters:
+            imports.append(
+                f"from ._{function_name}_cpukernel_d_{key} "
+                f"import _{function_name}_cpukernel_d_{key} as d_{key}"
+            )
+
+        body = f'''
+@nb.njit(parallel=True, nogil=True, fastmath=True, cache=True)
+def _{function_name}_{estimator_name}_{distribution_name}_cpu_assembly(
+    raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore
+):
     nmodels, npoints = raw_data.shape
     nparams = gradient.shape[1]
 
@@ -219,7 +268,6 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
         hess_local = np.zeros(NHESS, dtype=np.float32)
         jacob_local = np.empty(MAX_PARAMS, dtype=np.float32)
 
-        # Load model parameters once
         {model_params}
 
         for point in range(npoints):
@@ -228,7 +276,6 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
             point_raw_data = raw_data[model, point]
             point_weight = weights[model, point]
 
-            # Scalar model + estimator pieces
             mod = model_scalar({inputs_scalar})
             dev = deviance_scalar(point_raw_data, mod, point_weight)
             los = loss_scalar(point_raw_data, mod, point_weight)
@@ -236,11 +283,9 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
 
             chi_local += dev
 
-            # Active jacobian
             count = 0
 {derivatives}
 
-            # Gradient + packed upper Hessian
             for p in range(nparams):
                 Jp = jacob_local[p]
                 grad_local[p] += Jp * los
@@ -248,7 +293,6 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
                     idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
                     hess_local[idx] += Jp * jacob_local[q] * fis
 
-        # Write outputs
         chi2[model] = chi_local
 
         for p in range(nparams):
@@ -260,33 +304,69 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
                 v = hess_local[idx]
                 hessian[model, p, q] = v
                 hessian[model, q, p] = v
-    '''
+'''
+        return '\n'.join(imports) + '\n\nMAX_PARAMS = 8\nNHESS = int(8 * (8 + 1) // 2)\n' + body
 
-        glob = {'nb': nb, 'np': np, 'MAX_PARAMS': 8, 'NHESS': int(8 * (8 + 1) // 2), 'model_scalar': self.function.cpukernel_function, 'deviance_scalar': self.estimator.cpukernel_deviance, 'loss_scalar': self.estimator.cpukernel_loss, 'fisher_scalar': self.estimator.cpukernel_fisher}
-        for key in parameters:
-            glob[f'd_{key}'] = getattr(self.function, f'cpukernel_d_{key}')
-        loc = {}
-        exec(string, glob, loc)
-        return loc['func']
-
-
-
-    @prop(cache=True)
-    def gpu_assembly(self) :
+    def _gpu_assembly_source(self):
+        """Build source code for cached GPU assembly kernel."""
+        function_name, estimator_name, distribution_name = self._fit_cache_suffix
         variables = [key for key in self.function.variables]
         data = [key for key in self.function.data]
         parameters = [key for key in self.function.parameters.keys()]
         constants = [key for key in self.function.constants]
         inputs = ', '.join(variables + data + parameters + constants)
-        inputs_threads = ', '.join([f'thread_{key}' for key in variables] + [f'thread_{key}' for key in data] + [f'block_{key}' for key in parameters] + constants)
+        inputs_threads = ', '.join(
+            [f'thread_{key}' for key in variables]
+            + [f'thread_{key}' for key in data]
+            + [f'block_{key}' for key in parameters]
+            + constants
+        )
         thread_variables = '\n        '.join([f'thread_{key} = {key}[point]' for key in variables])
         thread_data = '\n        '.join([f'thread_{key} = {key}[model, point]' for key in data])
         block_params = '\n    '.join([f'block_{key} = {key}[model]' for key in parameters])
-        derivatives = '\n'.join([f'''        if bool2fit[{pos}]:\n            jacob_local[count] = d_{key}({inputs_threads})\n            count += 1\n''' for pos, key in enumerate(parameters)])
-        
-        string = f'''
-@nb.cuda.jit()
-def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore) :
+        derivatives = '\n'.join([
+            f'''        if bool2fit[{pos}]:
+            jacob_local[count] = d_{key}({inputs_threads})
+            count += 1
+'''
+            for pos, key in enumerate(parameters)
+        ])
+
+        imports = [
+            "import numba as nb",
+            "from numba import cuda",
+            (
+                f"from ._{function_name}_gpukernel_function import "
+                f"_{function_name}_gpukernel_function as model_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_gpukernel_deviance "
+                f"import _{estimator_name}_{distribution_name}_gpukernel_deviance as deviance_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_gpukernel_loss "
+                f"import _{estimator_name}_{distribution_name}_gpukernel_loss as loss_scalar"
+            ),
+            (
+                f"from ._{estimator_name}_{distribution_name}_gpukernel_fisher "
+                f"import _{estimator_name}_{distribution_name}_gpukernel_fisher as fisher_scalar"
+            ),
+        ]
+        for key in parameters:
+            imports.append(
+                f"from ._{function_name}_gpukernel_d_{key} "
+                f"import _{function_name}_gpukernel_d_{key} as d_{key}"
+            )
+
+        body = f'''
+TPB = 128
+MAX_PARAMS = 8
+NHESS = int(8 * (8 + 1) // 2)
+
+@nb.cuda.jit(cache=True)
+def _{function_name}_{estimator_name}_{distribution_name}_gpu_assembly(
+    raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore
+):
     model = nb.cuda.blockIdx.x
     tid = nb.cuda.threadIdx.x
     bdim = nb.cuda.blockDim.x
@@ -294,9 +374,9 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
     nmodels, npoints = raw_data.shape
     nparams = gradient.shape[1]
 
-    if model >= nmodels or ignore[model]: return
+    if model >= nmodels or ignore[model]:
+        return
 
-    # Local variables
     chi_local = nb.float32(0.0)
     grad_local = nb.cuda.local.array(MAX_PARAMS, nb.float32)
     hess_local = nb.cuda.local.array(NHESS, nb.float32)
@@ -307,29 +387,24 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
     for idx in range(NHESS):
         hess_local[idx] = 0.0
 
-    # load model parameters once
     {block_params}
 
-    # Loop over points
     for point in range(tid, npoints, bdim):
         {thread_variables}
         {thread_data}
         thread_raw_data = raw_data[model, point]
         thread_weight = weights[model, point]
 
-        # Calculate scalar values
         mod = model_scalar({inputs_threads})
         dev = deviance_scalar(thread_raw_data, mod, thread_weight)
         los = loss_scalar(thread_raw_data, mod, thread_weight)
         fis = fisher_scalar(thread_raw_data, mod, thread_weight)
         chi_local += dev
 
-        # Build active jacobian vector
         count = 0
 
 {derivatives}
 
-        # Gradient and Hessian accumulation
         for p in range(nparams):
             Jp = jacob_local[p]
             grad_local[p] += Jp * los
@@ -337,13 +412,11 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
                 idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
                 hess_local[idx] += Jp * jacob_local[q] * fis
 
-    # Shared memory for reduction
     s_chi = nb.cuda.shared.array(TPB, nb.float32)
     s_grad = nb.cuda.shared.array((TPB, MAX_PARAMS), nb.float32)
     s_hess = nb.cuda.shared.array((TPB, NHESS), nb.float32)
 
     s_chi[tid] = chi_local
-
     for p in range(MAX_PARAMS):
         s_grad[tid, p] = grad_local[p]
     for idx in range(NHESS):
@@ -351,30 +424,23 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
 
     nb.cuda.syncthreads()
 
-    # Block reduction
     stride = bdim // 2
     while stride > 0:
         if tid < stride:
             s_chi[tid] += s_chi[tid + stride]
-
             for p in range(nparams):
                 s_grad[tid, p] += s_grad[tid + stride, p]
-
             for p in range(nparams):
                 for q in range(p, nparams):
                     idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
                     s_hess[tid, idx] += s_hess[tid + stride, idx]
-
         nb.cuda.syncthreads()
         stride //= 2
 
-    # Write output
     if tid == 0:
         chi2[model] = s_chi[0]
-
         for p in range(nparams):
             gradient[model, p] = s_grad[0, p]
-
         for p in range(nparams):
             for q in range(p, nparams):
                 idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)
@@ -382,12 +448,31 @@ def func(raw_data, {inputs}, weights, chi2, gradient, hessian, bool2fit, ignore)
                 hessian[model, p, q] = v
                 hessian[model, q, p] = v
 '''
-        glob = {'nb': nb, 'TPB': 128, 'MAX_PARAMS': 8, 'NHESS': int(8 * (8 + 1) // 2), 'model_scalar': self.function.gpukernel_function, 'deviance_scalar': self.estimator.gpukernel_deviance, 'loss_scalar': self.estimator.gpukernel_loss, 'fisher_scalar': self.estimator.gpukernel_fisher}
-        for key in parameters :
-            glob[f'd_{key}'] = getattr(self.function, f"gpukernel_d_{key}")
-        loc = {}
-        exec(string, glob, loc)
-        return loc['func']
+        return '\n'.join(imports) + '\n\n' + body
+
+    @prop(cache=True)
+    def cpu_assembly(self):
+        function_name, estimator_name, distribution_name = self._fit_cache_suffix
+        _ = self.estimator.cpukernel_deviance
+        _ = self.estimator.cpukernel_loss
+        _ = self.estimator.cpukernel_fisher
+        module_name = f"_{function_name}_{estimator_name}_{distribution_name}_cpu_assembly"
+        object_name = module_name
+        source = self._cpu_assembly_source()
+        return kernel_caching(module_name, source, object_name=object_name)
+
+
+
+    @prop(cache=True)
+    def gpu_assembly(self) :
+        function_name, estimator_name, distribution_name = self._fit_cache_suffix
+        _ = self.estimator.gpukernel_deviance
+        _ = self.estimator.gpukernel_loss
+        _ = self.estimator.gpukernel_fisher
+        module_name = f"_{function_name}_{estimator_name}_{distribution_name}_gpu_assembly"
+        object_name = module_name
+        source = self._gpu_assembly_source()
+        return kernel_caching(module_name, source, object_name=object_name)
 
 
 

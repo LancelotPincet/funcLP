@@ -17,6 +17,7 @@ Here are the references to the various modules to import in **funcLP**.
    Fit
    Function
    JointFunction
+   kernel_caching
    make_calculation
    plot
    ufunc

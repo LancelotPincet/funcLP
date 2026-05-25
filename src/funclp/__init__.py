@@ -19,6 +19,7 @@ sources = {
 'Fit': 'funclp.modules.Fit_LP.Fit',
 'Function': 'funclp.modules.Function_LP.Function',
 'JointFunction': 'funclp.modules.JointFunction_LP.JointFunction',
+'kernel_caching': 'funclp.modules.kernel_caching_LP.kernel_caching',
 'make_calculation': 'funclp.modules.make_calculation_LP.make_calculation',
 'plot': 'funclp.modules.plot_LP.plot',
 'ufunc': 'funclp.modules.ufunc_LP.ufunc',

@@ -13,11 +13,8 @@ Decorator class defining universal function factory object from python kernel fu
 
 
 # %% Libraries
-from funclp import make_calculation, Parameter
+from funclp import make_calculation, Parameter, kernel_caching
 import inspect
-import importlib
-from pathlib import Path
-cache_folder = Path(__file__).parent / '_functions/cached'
 
 
 # %% Class
@@ -160,41 +157,53 @@ class ufunc() :
 
         # Kernels
 
-        file = cache_folder / f'_{classname}_cpukernel_{name}.py'
+        module_name = f'_{classname}_cpukernel_{name}'
         string = f'''
 from funclp import ufunc
 import numba as nb
 _{classname}_cpukernel_{name} = nb.njit(nogil=True, cache=True)(ufunc.main_functions["{classname}_{name}"])
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def cpukernel(instance):
+        def cpukernel(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_cpukernel_{name}",
+        ):
             func = getattr(cls, f'_cpukernel_{name}', None)
             if func is None:
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_cpukernel_{name}")
-                func = getattr(module, f"_{classname}_cpukernel_{name}")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_cpukernel_{name}', func)
             return func
         setattr(cls, f'cpukernel_{name}', cpukernel)
 
-        file = cache_folder / f'_{classname}_gpukernel_{name}.py'
+        module_name = f'_{classname}_gpukernel_{name}'
         string = f'''
 from funclp import ufunc
 import numba as nb
 from numba import cuda
 _{classname}_gpukernel_{name} = nb.cuda.jit(device=True, cache=True)(ufunc.main_functions["{classname}_{name}"])
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def gpukernel(instance):
+        def gpukernel(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_gpukernel_{name}",
+        ):
             func = getattr(cls, f'_gpukernel_{name}', None)
             if func is None:
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_gpukernel_{name}")
-                func = getattr(module, f"_{classname}_gpukernel_{name}")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_gpukernel_{name}', func)
             return func
         setattr(cls, f'gpukernel_{name}', gpukernel)
@@ -203,7 +212,7 @@ _{classname}_gpukernel_{name} = nb.cuda.jit(device=True, cache=True)(ufunc.main_
 
         # Jitted functions
 
-        file = cache_folder / f'_{classname}_cpu_{name}.py'
+        module_name = f'_{classname}_cpu_{name}'
         string = f'''
 from ._{classname}_cpukernel_{name} import _{classname}_cpukernel_{name} as kernel
 import numba as nb
@@ -215,20 +224,26 @@ def _{classname}_cpu_{name}({self.inputs}, out, ignore) :
         for point in range(npoints) :
             out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def cpu(instance):
+        def cpu(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_cpu_{name}",
+        ):
             func = getattr(cls, f'_cpu_{name}', None)
             if func is None:
-                importlib.invalidate_caches()
-                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_cpu_{name}")
-                func = getattr(module, f"_{classname}_cpu_{name}")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_cpu_{name}', func)
             return func
         setattr(cls, f'cpu_{name}', cpu)
 
-        file = cache_folder / f'_{classname}_gpu_{name}.py'
+        module_name = f'_{classname}_gpu_{name}'
         string = f'''
 from ._{classname}_gpukernel_{name} import _{classname}_gpukernel_{name} as kernel
 import numba as nb
@@ -240,14 +255,21 @@ def _{classname}_gpu_{name}({self.inputs}, out, ignore) :
     if model < nmodels and point < npoints and not ignore[model] :
         out[model, point] = kernel({self.indexes_variables}{self.indexes_data}{self.indexes_parameters}{self.indexes_constants})
 '''
-        if not file.exists() or file.read_text() != string:
-            file.write_text(string)
+        kernel_caching(module_name, string)
         @property
-        def gpu(instance):
+        def gpu(
+            instance,
+            _module_name=module_name,
+            _string=string,
+            _object_name=f"_{classname}_gpu_{name}",
+        ):
             func = getattr(cls, f'_gpu_{name}', None)
             if func is None:
-                module = importlib.import_module(f"{__package__}._functions.cached._{classname}_gpu_{name}")
-                func = getattr(module, f"_{classname}_gpu_{name}")
+                func = kernel_caching(
+                    _module_name,
+                    _string,
+                    object_name=_object_name,
+                )
                 setattr(cls, f'_gpu_{name}', func)
             return func
         setattr(cls, f'gpu_{name}', gpu)

@@ -9,6 +9,7 @@
 
 # %% Libraries
 from funclp import Fit
+from funclp.modules.kernel_caching_LP.kernel_caching import kernel_caching
 import math
 from corelp import prop
 import numba as nb
@@ -236,31 +237,51 @@ class LM(Fit) :
 
     # Chi2 trial
 
-    @prop(cache=True)
-    def cpu_trial_chi2(self):
+    def _trial_cache_suffix(self):
+        """Stable suffix for cached trial kernels."""
+        function_name = self.function.__class__.__name__
+        estimator_name = self.estimator.__class__.__name__
+        distribution = getattr(self.estimator, "distribution", None)
+        distribution_name = distribution.__class__.__name__ if distribution is not None else "None"
+        return function_name, estimator_name, distribution_name
+
+    def _cpu_trial_source(self):
+        """Build source code for cached CPU trial-chi2 kernel."""
+        function_name, estimator_name, distribution_name = self._trial_cache_suffix()
         variables = [key for key in self.function.variables]
         data = [key for key in self.function.data]
         parameters = [key for key in self.function.parameters.keys()]
         constants = [key for key in self.function.constants]
         inputs = ', '.join(variables + data + parameters + constants)
-        inputs_scalar = ', '.join([f'point_{key}' for key in variables] + [f'point_{key}' for key in data] + [f'model_{key}' for key in parameters] + constants)
+        inputs_scalar = ', '.join(
+            [f'point_{key}' for key in variables]
+            + [f'point_{key}' for key in data]
+            + [f'model_{key}' for key in parameters]
+            + constants
+        )
         point_variables = '\n            '.join([f'point_{key} = {key}[point]' for key in variables])
         point_data = '\n            '.join([f'point_{key} = {key}[model, point]' for key in data])
         model_params = '\n        '.join([f'model_{key} = {key}[model]' for key in parameters])
-        string = f'''
-@nb.njit(parallel=True, nogil=True, fastmath=True)
-def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient, hessian, damping, nu, damping_max, damping_min, converged, improved, ignore):
+
+        return f'''
+import numba as nb
+from ._{function_name}_cpukernel_function import _{function_name}_cpukernel_function as model_scalar
+from ._{estimator_name}_{distribution_name}_cpukernel_deviance import _{estimator_name}_{distribution_name}_cpukernel_deviance as deviance_scalar
+
+@nb.njit(parallel=True, nogil=True, fastmath=True, cache=True)
+def _{function_name}_{estimator_name}_{distribution_name}_cpu_trial_chi2(
+    raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient,
+    hessian, damping, nu, damping_max, damping_min, converged, improved, ignore
+):
     nmodels, npoints = raw_data.shape
     nparams = steps.shape[1]
 
     for model in nb.prange(nmodels):
-        if ignore[model]: continue
-
-        # Trial chi2
+        if ignore[model]:
+            continue
 
         chi_local = 0.0
 
-        # Load model parameters once
         {model_params}
 
         for point in range(npoints):
@@ -276,70 +297,75 @@ def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient
         new_chi2 = chi_local
         old_chi2 = chi2[model]
 
-        # Improving logic
-
-        # Predicted residuals
         pred = 0.0
         for param in range(nparams):
-            pred += steps[model, param] * (-gradient[model, param] + damping[model] * max(1e-12, abs(hessian[model, param, param])) * steps[model, param])
+            pred += steps[model, param] * (
+                -gradient[model, param]
+                + damping[model] * max(1e-12, abs(hessian[model, param, param])) * steps[model, param]
+            )
         pred *= 0.5
 
-        # Actual residuals
         ared = old_chi2 - new_chi2
-
-        # Rho
         rho = ared / pred if pred > 1e-12 else -1.0
         rho = min(max(rho, -1e6), 1e6)
 
-        # Better
         if (not ignore[model]) and (pred > 1e-12) and (ared > 0.0):
             improved[model] = True
             chi2[model] = new_chi2
             tmp = 1.0 - (2.0 * rho - 1.0) ** 3
-            if tmp < 1.0 / 3.0: tmp = 1.0 / 3.0
-            elif tmp > 10.0:    tmp = 10.0
+            if tmp < 1.0 / 3.0:
+                tmp = 1.0 / 3.0
+            elif tmp > 10.0:
+                tmp = 10.0
             damping[model] *= tmp
             nu[model] = 2.0
-            if damping[model] < damping_min :
+            if damping[model] < damping_min:
                 damping[model] = damping_min
-
-        # Worse or failed
-        else :
-            if not ignore[model] :
-                for param in range(nparams) :
+        else:
+            if not ignore[model]:
+                for param in range(nparams):
                     parameters[model, indices[param]] -= steps[model, param]
             if damping[model] >= damping_max:
                 converged[model] = -1
-                improved[model] = True # Did not really improve but we give up
-            else :
+                improved[model] = True
+            else:
                 damping[model] *= nu[model]
                 nu[model] *= 2.0
-                if damping[model] > damping_max :
+                if damping[model] > damping_max:
                     damping[model] = damping_max
 '''
 
-        glob = {'nb': nb, 'model_scalar': self.function.cpukernel_function, 'deviance_scalar': self.estimator.cpukernel_deviance}
-        loc = {}
-        exec(string, glob, loc)
-        return loc['func']
-
-
-
-    @prop(cache=True)
-    def gpu_trial_chi2(self):
+    def _gpu_trial_source(self):
+        """Build source code for cached GPU trial-chi2 kernel."""
+        function_name, estimator_name, distribution_name = self._trial_cache_suffix()
         variables = [key for key in self.function.variables]
         data = [key for key in self.function.data]
         parameters = [key for key in self.function.parameters.keys()]
         constants = [key for key in self.function.constants]
         inputs = ', '.join(variables + data + parameters + constants)
-        inputs_threads = ', '.join([f'thread_{key}' for key in variables] + [f'thread_{key}' for key in data] + [f'block_{key}' for key in parameters] + constants)
+        inputs_threads = ', '.join(
+            [f'thread_{key}' for key in variables]
+            + [f'thread_{key}' for key in data]
+            + [f'block_{key}' for key in parameters]
+            + constants
+        )
         thread_variables = '\n        '.join([f'thread_{key} = {key}[point]' for key in variables])
         thread_data = '\n        '.join([f'thread_{key} = {key}[model, point]' for key in data])
         block_params = '\n    '.join([f'block_{key} = {key}[model]' for key in parameters])
 
-        string = f'''
-@nb.cuda.jit()
-def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient, hessian, damping, nu, damping_max, damping_min, converged, improved, ignore):
+        return f'''
+import numba as nb
+from numba import cuda
+from ._{function_name}_gpukernel_function import _{function_name}_gpukernel_function as model_scalar
+from ._{estimator_name}_{distribution_name}_gpukernel_deviance import _{estimator_name}_{distribution_name}_gpukernel_deviance as deviance_scalar
+
+TPB = 128
+
+@nb.cuda.jit(cache=True)
+def _{function_name}_{estimator_name}_{distribution_name}_gpu_trial_chi2(
+    raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient,
+    hessian, damping, nu, damping_max, damping_min, converged, improved, ignore
+):
     model = nb.cuda.blockIdx.x
     tid = nb.cuda.threadIdx.x
     bdim = nb.cuda.blockDim.x
@@ -347,28 +373,23 @@ def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient
     nmodels, npoints = raw_data.shape
     nparams = steps.shape[1]
 
-    if model >= nmodels or ignore[model]: return
-
-    # Trial chi2 accumulation
+    if model >= nmodels or ignore[model]:
+        return
 
     chi_local = nb.float32(0.0)
 
-    # Load model parameters once
     {block_params}
 
-    # Loop over points
     for point in range(tid, npoints, bdim):
         {thread_variables}
         {thread_data}
         thread_raw_data = raw_data[model, point]
         thread_weight = weights[model, point]
 
-        # Scalar model + deviance
         pred = model_scalar({inputs_threads})
         dev = deviance_scalar(thread_raw_data, pred, thread_weight)
         chi_local += dev
 
-    # Shared memory reduction
     s_chi = nb.cuda.shared.array(TPB, nb.float32)
     s_chi[tid] = chi_local
     nb.cuda.syncthreads()
@@ -383,36 +404,32 @@ def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient
     if tid == 0:
         new_chi2 = s_chi[0]
         old_chi2 = chi2[model]
-    
-    # Improving logic
 
-        # Predicted residuals
         pred = 0.0
         for param in range(nparams):
             step = steps[model, param]
-            pred += step * (-gradient[model, param] + damping[model] * max(1e-12, abs(hessian[model, param, param])) * step)
+            pred += step * (
+                -gradient[model, param]
+                + damping[model] * max(1e-12, abs(hessian[model, param, param])) * step
+            )
         pred *= 0.5
 
-        # Acutal residuals
         ared = old_chi2 - new_chi2
-
-        # Rho
         rho = ared / pred if pred > 1e-12 else -1.0
         rho = min(max(rho, -1e6), 1e6)
 
-        # Better
         if (not ignore[model]) and (pred > 1e-12) and (ared > 0.0):
             improved[model] = True
             chi2[model] = new_chi2
             tmp = 1.0 - (2.0 * rho - 1.0) ** 3
-            if tmp < 1.0 / 3.0: tmp = 1.0 / 3.0
-            elif tmp > 10.0: tmp = 10.0
+            if tmp < 1.0 / 3.0:
+                tmp = 1.0 / 3.0
+            elif tmp > 10.0:
+                tmp = 10.0
             damping[model] *= tmp
             nu[model] = 2.0
             if damping[model] < damping_min:
                 damping[model] = damping_min
-
-        # Worse or failed
         else:
             if not ignore[model]:
                 for param in range(nparams):
@@ -426,10 +443,24 @@ def func(raw_data, {inputs}, weights, chi2, parameters, indices, steps, gradient
                 if damping[model] > damping_max:
                     damping[model] = damping_max
 '''
-        glob = {'nb': nb, 'TPB': 128, 'model_scalar': self.function.gpukernel_function,'deviance_scalar': self.estimator.gpukernel_deviance}
-        loc = {}
-        exec(string, glob, loc)
-        return loc['func']
+
+    @prop(cache=True)
+    def cpu_trial_chi2(self):
+        function_name, estimator_name, distribution_name = self._trial_cache_suffix()
+        _ = self.estimator.cpukernel_deviance
+        module_name = f"_{function_name}_{estimator_name}_{distribution_name}_cpu_trial_chi2"
+        source = self._cpu_trial_source()
+        return kernel_caching(module_name, source, object_name=module_name)
+
+
+
+    @prop(cache=True)
+    def gpu_trial_chi2(self):
+        function_name, estimator_name, distribution_name = self._trial_cache_suffix()
+        _ = self.estimator.gpukernel_deviance
+        module_name = f"_{function_name}_{estimator_name}_{distribution_name}_gpu_trial_chi2"
+        source = self._gpu_trial_source()
+        return kernel_caching(module_name, source, object_name=module_name)
 
 
 
