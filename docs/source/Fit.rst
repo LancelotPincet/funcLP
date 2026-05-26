@@ -13,3 +13,4 @@ Optimizers
    :maxdepth: 1
 
    LM
+   LM_profile

@@ -30,6 +30,7 @@ sources = {
 'LSE': 'funclp.modules.Estimator_LP._functions.estimators.LSE',
 'MLE': 'funclp.modules.Estimator_LP._functions.estimators.MLE',
 'LM': 'funclp.modules.Fit_LP._functions.optimizers.LM',
+'LM_profile': 'funclp.modules.Fit_LP._functions.optimizers.LM_profile',
 'Diamond': 'funclp.modules.Function_LP._functions.masks.Diamond',
 'Rectangle': 'funclp.modules.Function_LP._functions.masks.Rectangle',
 'Disc': 'funclp.modules.Function_LP._functions.masks.Disc',

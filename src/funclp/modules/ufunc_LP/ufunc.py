@@ -161,7 +161,7 @@ class ufunc() :
         string = f'''
 from funclp import ufunc
 import numba as nb
-_{classname}_cpukernel_{name} = nb.njit(nogil=True, cache=True)(ufunc.main_functions["{classname}_{name}"])
+_{classname}_cpukernel_{name} = nb.njit(nogil=True, inline="always", fastmath={self.fastmath}, cache=True)(ufunc.main_functions["{classname}_{name}"])
 '''
         kernel_caching(module_name, string)
         @property
@@ -187,7 +187,7 @@ _{classname}_cpukernel_{name} = nb.njit(nogil=True, cache=True)(ufunc.main_funct
 from funclp import ufunc
 import numba as nb
 from numba import cuda
-_{classname}_gpukernel_{name} = nb.cuda.jit(device=True, cache=True)(ufunc.main_functions["{classname}_{name}"])
+_{classname}_gpukernel_{name} = nb.cuda.jit(device=True, inline="always", fastmath={self.fastmath}, cache=True)(ufunc.main_functions["{classname}_{name}"])
 '''
         kernel_caching(module_name, string)
         @property

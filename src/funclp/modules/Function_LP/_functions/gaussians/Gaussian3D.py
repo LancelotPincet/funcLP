@@ -62,6 +62,67 @@ class Gaussian3D(Function):
     def function(x, y, z, /, mux=0., muy=0., muz=0., sigx=1/(2*np.pi)**(3/2), sigy=1/(2*np.pi)**(3/2), sigz=1/(2*np.pi)**(3/2), amp=1., offset=0., pixx=-1., pixy=-1., pixz=-1., nsig=-1., theta=0., phi=0.) :
         x, y, z, mux, muy, muz = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
         return amp * gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) * gausfunc(z, muz, sigz, 1, 0, pixz, nsig) + offset
+
+    # Parameters derivatives
+    @ufunc()
+    def d_mux(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(mux)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux + eps, muy, muz)
+        f_plus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        x2, y2, z2, mux2, muy2, muz2 = correct_angle_3D(theta, phi, x, y, z, mux - eps, muy, muz)
+        f_minus = amp * gausfunc(x2, mux2, sigx, 1, 0, pixx, nsig) * gausfunc(y2, muy2, sigy, 1, 0, pixy, nsig) * gausfunc(z2, muz2, sigz, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_muy(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(muy)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux, muy + eps, muz)
+        f_plus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        x2, y2, z2, mux2, muy2, muz2 = correct_angle_3D(theta, phi, x, y, z, mux, muy - eps, muz)
+        f_minus = amp * gausfunc(x2, mux2, sigx, 1, 0, pixx, nsig) * gausfunc(y2, muy2, sigy, 1, 0, pixy, nsig) * gausfunc(z2, muz2, sigz, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_muz(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(muz)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz + eps)
+        f_plus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        x2, y2, z2, mux2, muy2, muz2 = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz - eps)
+        f_minus = amp * gausfunc(x2, mux2, sigx, 1, 0, pixx, nsig) * gausfunc(y2, muy2, sigy, 1, 0, pixy, nsig) * gausfunc(z2, muz2, sigz, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_sigx(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(sigx)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
+        f_plus = amp * gausfunc(x1, mux1, sigx + eps, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        f_minus = amp * gausfunc(x1, mux1, sigx - eps, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_sigy(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(sigy)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
+        f_plus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy + eps, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        f_minus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy - eps, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_sigz(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        eps = np.float32(1e-3 * max(1.0, abs(sigz)))
+        x1, y1, z1, mux1, muy1, muz1 = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
+        f_plus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz + eps, 1, 0, pixz, nsig) + offset
+        f_minus = amp * gausfunc(x1, mux1, sigx, 1, 0, pixx, nsig) * gausfunc(y1, muy1, sigy, 1, 0, pixy, nsig) * gausfunc(z1, muz1, sigz - eps, 1, 0, pixz, nsig) + offset
+        return (f_plus - f_minus) / (2.0 * eps)
+
+    @ufunc()
+    def d_amp(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        x, y, z, mux, muy, muz = correct_angle_3D(theta, phi, x, y, z, mux, muy, muz)
+        return gausfunc(x, mux, sigx, 1, 0, pixx, nsig) * gausfunc(y, muy, sigy, 1, 0, pixy, nsig) * gausfunc(z, muz, sigz, 1, 0, pixz, nsig)
+
+    @ufunc()
+    def d_offset(x, y, z, /, mux, muy, muz, sigx, sigy, sigz, amp, offset, pixx, pixy, pixz, nsig, theta, phi) :
+        return 1
     
     
 
@@ -139,6 +200,99 @@ class Gaussian3D(Function):
     @sig.setter
     def sig(self, value) :
         self.sigx, self.sigy, self.sigz = value, value, value
+
+    def _cpu_assembly_model_setup_source(self, model_params, parameters):
+        return '''block_mux = mux[model]
+        block_muy = muy[model]
+        block_muz = muz[model]
+        block_sigx = sigx[model]
+        block_sigy = sigy[model]
+        block_sigz = sigz[model]
+        block_amp = amp[model]
+        block_offset = offset[model]
+        block_pixx = pixx[model]
+        block_pixy = pixy[model]
+        block_pixz = pixz[model]
+        block_nsig = nsig[model]
+        block_theta = theta[model]
+        block_phi = phi[model]'''
+
+    def _gpu_assembly_model_setup_source(self, block_params, parameters):
+        return '''block_mux = mux[model]
+    block_muy = muy[model]
+    block_muz = muz[model]
+    block_sigx = sigx[model]
+    block_sigy = sigy[model]
+    block_sigz = sigz[model]
+    block_amp = amp[model]
+    block_offset = offset[model]
+    block_pixx = pixx[model]
+    block_pixy = pixy[model]
+    block_pixz = pixz[model]
+    block_nsig = nsig[model]
+    block_theta = theta[model]
+    block_phi = phi[model]'''
+
+    def _cpu_assembly_model_eval_source(self, inputs_scalar):
+        return '''            mod = model_scalar(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+            chi_local += dev'''
+
+    def _gpu_assembly_model_eval_source(self, inputs_threads):
+        return '''        mod = model_scalar(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+        dev = deviance_scalar(thread_raw_data, mod, thread_weight)
+        los = loss_scalar(thread_raw_data, mod, thread_weight)
+        fis = fisher_scalar(thread_raw_data, mod, thread_weight)
+        chi_local += dev'''
+
+    def _cpu_assembly_derivatives_source(self, parameters, inputs_scalar):
+        return '''            if bool2fit[0]:
+                jacob_local[count] = d_mux(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[1]:
+                jacob_local[count] = d_muy(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[2]:
+                jacob_local[count] = d_muz(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[3]:
+                jacob_local[count] = d_sigx(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[4]:
+                jacob_local[count] = d_sigy(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[5]:
+                jacob_local[count] = d_sigz(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[6]:
+                jacob_local[count] = d_amp(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[7]:
+                jacob_local[count] = d_offset(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[8]:
+                jacob_local[count] = d_pixx(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[9]:
+                jacob_local[count] = d_pixy(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[10]:
+                jacob_local[count] = d_pixz(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[11]:
+                jacob_local[count] = d_nsig(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[12]:
+                jacob_local[count] = d_theta(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1
+            if bool2fit[13]:
+                jacob_local[count] = d_phi(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_sigx, block_sigy, block_sigz, block_amp, block_offset, block_pixx, block_pixy, block_pixz, block_nsig, block_theta, block_phi)
+                count += 1'''
+
+    def _gpu_assembly_derivatives_source(self, parameters, inputs_threads):
+        return self._cpu_assembly_derivatives_source(parameters, inputs_threads).replace('            ', '        ')
 
 
 

@@ -193,6 +193,108 @@ class Gaussian2D(Function):
         a, b = np.min(np.vstack((self.sigx, self.sigy)), axis=0), np.max(np.vstack((self.sigx, self.sigy)), axis=0)
         return np.sqrt(1 - (a/b)**2)
 
+    def _cpu_assembly_model_setup_source(self, model_params, parameters):
+        return '''block_mux = mux[model]
+        block_muy = muy[model]
+        block_sigx = sigx[model]
+        block_sigy = sigy[model]
+        block_amp = amp[model]
+        block_offset = offset[model]
+        block_pixx = pixx[model]
+        block_pixy = pixy[model]
+        block_nsig = nsig[model]
+        block_theta = theta[model]'''
+
+    def _gpu_assembly_model_setup_source(self, block_params, parameters):
+        return '''block_mux = mux[model]
+    block_muy = muy[model]
+    block_sigx = sigx[model]
+    block_sigy = sigy[model]
+    block_amp = amp[model]
+    block_offset = offset[model]
+    block_pixx = pixx[model]
+    block_pixy = pixy[model]
+    block_nsig = nsig[model]
+    block_theta = theta[model]'''
+
+    def _cpu_assembly_model_eval_source(self, inputs_scalar):
+        return '''            mod = model_scalar(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+            chi_local += dev'''
+
+    def _gpu_assembly_model_eval_source(self, inputs_threads):
+        return '''        mod = model_scalar(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+        dev = deviance_scalar(thread_raw_data, mod, thread_weight)
+        los = loss_scalar(thread_raw_data, mod, thread_weight)
+        fis = fisher_scalar(thread_raw_data, mod, thread_weight)
+        chi_local += dev'''
+
+    def _cpu_assembly_derivatives_source(self, parameters, inputs_scalar):
+        return '''            if bool2fit[0]:
+                jacob_local[count] = d_mux(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[1]:
+                jacob_local[count] = d_muy(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[2]:
+                jacob_local[count] = d_sigx(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[3]:
+                jacob_local[count] = d_sigy(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[4]:
+                jacob_local[count] = d_amp(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[5]:
+                jacob_local[count] = d_offset(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[6]:
+                jacob_local[count] = d_pixx(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[7]:
+                jacob_local[count] = d_pixy(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[8]:
+                jacob_local[count] = d_nsig(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1
+            if bool2fit[9]:
+                jacob_local[count] = d_theta(point_x, point_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+                count += 1'''
+
+    def _gpu_assembly_derivatives_source(self, parameters, inputs_threads):
+        return '''        if bool2fit[0]:
+            jacob_local[count] = d_mux(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[1]:
+            jacob_local[count] = d_muy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[2]:
+            jacob_local[count] = d_sigx(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[3]:
+            jacob_local[count] = d_sigy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[4]:
+            jacob_local[count] = d_amp(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[5]:
+            jacob_local[count] = d_offset(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[6]:
+            jacob_local[count] = d_pixx(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[7]:
+            jacob_local[count] = d_pixy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[8]:
+            jacob_local[count] = d_nsig(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1
+        if bool2fit[9]:
+            jacob_local[count] = d_theta(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
+            count += 1'''
+
 
 
 # %% Test function run

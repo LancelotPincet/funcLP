@@ -125,6 +125,80 @@ class Spline3D(Function):
     def d_offset(x, y, z, /, mux, muy, muz, amp, offset, kx=3, ky=3, kz=3, tx=None, ty=None, tz=None, coeffs=None):
         return np.float32(1.0)
 
+    def _cpu_assembly_extra_imports_source(self, estimator, function_name, estimator_name, distribution_name, parameters):
+        return "from funclp.modules.Function_LP._functions.splines._splines import bspline3d, bspline3d_dx, bspline3d_dy, bspline3d_dz"
+
+    def _cpu_assembly_model_setup_source(self, model_params, parameters):
+        return '''block_mux = mux[model]
+        block_muy = muy[model]
+        block_muz = muz[model]
+        block_amp = amp[model]
+        block_offset = offset[model]
+        block_kx = kx[model]
+        block_ky = ky[model]
+        block_kz = kz[model]'''
+
+    def _cpu_assembly_model_eval_source(self, inputs_scalar):
+        return '''            base = bspline3d(tx, ty, tz, coeffs, block_kx, block_ky, block_kz, point_x - block_mux, point_y - block_muy, point_z - block_muz)
+            mod = block_amp * base + block_offset
+
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+            chi_local += dev'''
+
+    def _cpu_assembly_derivatives_source(self, parameters, inputs_scalar):
+        return '''            if bool2fit[0]:
+                jacob_local[count] = -block_amp * bspline3d_dx(tx, ty, tz, coeffs, block_kx, block_ky, block_kz, point_x - block_mux, point_y - block_muy, point_z - block_muz)
+                count += 1
+            if bool2fit[1]:
+                jacob_local[count] = -block_amp * bspline3d_dy(tx, ty, tz, coeffs, block_kx, block_ky, block_kz, point_x - block_mux, point_y - block_muy, point_z - block_muz)
+                count += 1
+            if bool2fit[2]:
+                jacob_local[count] = -block_amp * bspline3d_dz(tx, ty, tz, coeffs, block_kx, block_ky, block_kz, point_x - block_mux, point_y - block_muy, point_z - block_muz)
+                count += 1
+            if bool2fit[3]:
+                jacob_local[count] = base
+                count += 1
+            if bool2fit[4]:
+                jacob_local[count] = 1.0
+                count += 1
+            if bool2fit[5]:
+                jacob_local[count] = d_kx(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+                count += 1
+            if bool2fit[6]:
+                jacob_local[count] = d_ky(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+                count += 1
+            if bool2fit[7]:
+                jacob_local[count] = d_kz(point_x, point_y, point_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+                count += 1'''
+
+    def _gpu_assembly_derivatives_source(self, parameters, inputs_threads):
+        return '''        if bool2fit[0]:
+            jacob_local[count] = d_mux(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[1]:
+            jacob_local[count] = d_muy(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[2]:
+            jacob_local[count] = d_muz(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[3]:
+            jacob_local[count] = d_amp(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[4]:
+            jacob_local[count] = d_offset(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[5]:
+            jacob_local[count] = d_kx(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[6]:
+            jacob_local[count] = d_ky(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1
+        if bool2fit[7]:
+            jacob_local[count] = d_kz(thread_x, thread_y, thread_z, block_mux, block_muy, block_muz, block_amp, block_offset, block_kx, block_ky, block_kz, tx, ty, tz, coeffs)
+            count += 1'''
+
 
 
 # %% Test function run

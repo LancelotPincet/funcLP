@@ -78,6 +78,52 @@ class Spline(Function):
     def d_offset(x, /, mu, amp, offset, k=3, t=None, coeffs=None):
         return np.float32(1.0)  
 
+    def _cpu_assembly_extra_imports_source(self, estimator, function_name, estimator_name, distribution_name, parameters):
+        return "from funclp.modules.Function_LP._functions.splines._splines import bspline1d, bspline1d_dx"
+
+    def _cpu_assembly_model_setup_source(self, model_params, parameters):
+        return '''model_mu = mu[model]
+        model_amp = amp[model]
+        model_offset = offset[model]
+        model_k = k[model]'''
+
+    def _cpu_assembly_model_eval_source(self, inputs_scalar):
+        return '''            base = bspline1d(t, coeffs, model_k, point_x - model_mu)
+            mod = model_amp * base + model_offset
+
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+            chi_local += dev'''
+
+    def _cpu_assembly_derivatives_source(self, parameters, inputs_scalar):
+        return '''            if bool2fit[0]:
+                jacob_local[count] = -model_amp * bspline1d_dx(t, coeffs, model_k, point_x - model_mu)
+                count += 1
+            if bool2fit[1]:
+                jacob_local[count] = base
+                count += 1
+            if bool2fit[2]:
+                jacob_local[count] = 1.0
+                count += 1
+            if bool2fit[3]:
+                jacob_local[count] = d_k(point_x, model_mu, model_amp, model_offset, model_k, t, coeffs)
+                count += 1'''
+
+    def _gpu_assembly_derivatives_source(self, parameters, inputs_threads):
+        return '''        if bool2fit[0]:
+            jacob_local[count] = d_mu(thread_x, block_mu, block_amp, block_offset, block_k, t, coeffs)
+            count += 1
+        if bool2fit[1]:
+            jacob_local[count] = d_amp(thread_x, block_mu, block_amp, block_offset, block_k, t, coeffs)
+            count += 1
+        if bool2fit[2]:
+            jacob_local[count] = d_offset(thread_x, block_mu, block_amp, block_offset, block_k, t, coeffs)
+            count += 1
+        if bool2fit[3]:
+            jacob_local[count] = d_k(thread_x, block_mu, block_amp, block_offset, block_k, t, coeffs)
+            count += 1'''
+
 
 
 # %% Test function run

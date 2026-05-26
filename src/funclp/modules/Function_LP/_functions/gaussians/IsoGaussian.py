@@ -118,6 +118,114 @@ class IsoGaussian(Function):
     def pix(self, value) :
         self.pixx, self.pixy = value, value
 
+    def _cpu_assembly_extra_imports_source(self, estimator, function_name, estimator_name, distribution_name, parameters):
+        return "from funclp.modules.Function_LP._functions.gaussians._gaussians import gausfunc"
+
+    def _gpu_assembly_extra_imports_source(self, estimator, function_name, estimator_name, distribution_name, parameters):
+        return "from funclp.modules.Function_LP._functions.gaussians._gaussians import gausfunc"
+
+    def _cpu_assembly_model_setup_source(self, model_params, parameters):
+        return model_params + '''
+
+        safe_sig = model_sig
+        if abs(safe_sig) < 1e-12:
+            safe_sig = 1e-12
+        inv_sig2 = 1.0 / (safe_sig * safe_sig)
+        inv_sig3 = inv_sig2 / safe_sig'''
+
+    def _gpu_assembly_model_setup_source(self, block_params, parameters):
+        return block_params + '''
+
+    safe_sig = block_sig
+    if abs(safe_sig) < 1e-12:
+        safe_sig = 1e-12
+    inv_sig2 = 1.0 / (safe_sig * safe_sig)
+    inv_sig3 = inv_sig2 / safe_sig'''
+
+    def _cpu_assembly_model_eval_source(self, inputs_scalar):
+        return '''
+            exx = gausfunc(point_x, model_mux, safe_sig, 1.0, 0.0, model_pixx, model_nsig)
+            exy = gausfunc(point_y, model_muy, safe_sig, 1.0, 0.0, model_pixy, model_nsig)
+            base = exx * exy
+            mod = model_amp * base + model_offset
+
+            dev = deviance_scalar(point_raw_data, mod, point_weight)
+            los = loss_scalar(point_raw_data, mod, point_weight)
+            fis = fisher_scalar(point_raw_data, mod, point_weight)
+            chi_local += dev
+
+            dx = point_x - model_mux
+            dy = point_y - model_muy
+            r2 = dx * dx + dy * dy'''
+
+    def _gpu_assembly_model_eval_source(self, inputs_threads):
+        return '''
+        exx = gausfunc(thread_x, block_mux, safe_sig, 1.0, 0.0, block_pixx, block_nsig)
+        exy = gausfunc(thread_y, block_muy, safe_sig, 1.0, 0.0, block_pixy, block_nsig)
+        base = exx * exy
+        mod = block_amp * base + block_offset
+
+        dev = deviance_scalar(thread_raw_data, mod, thread_weight)
+        los = loss_scalar(thread_raw_data, mod, thread_weight)
+        fis = fisher_scalar(thread_raw_data, mod, thread_weight)
+        chi_local += dev
+
+        dx = thread_x - block_mux
+        dy = thread_y - block_muy
+        r2 = dx * dx + dy * dy'''
+
+    def _cpu_assembly_derivatives_source(self, parameters, inputs_scalar):
+        return '''            if bool2fit[0]:
+                jacob_local[count] = model_amp * base * dx * inv_sig2
+                count += 1
+            if bool2fit[1]:
+                jacob_local[count] = model_amp * base * dy * inv_sig2
+                count += 1
+            if bool2fit[2]:
+                jacob_local[count] = model_amp * base * r2 * inv_sig3
+                count += 1
+            if bool2fit[3]:
+                jacob_local[count] = base
+                count += 1
+            if bool2fit[4]:
+                jacob_local[count] = 1.0
+                count += 1
+            if bool2fit[5]:
+                jacob_local[count] = d_pixx(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                count += 1
+            if bool2fit[6]:
+                jacob_local[count] = d_pixy(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                count += 1
+            if bool2fit[7]:
+                jacob_local[count] = d_nsig(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                count += 1'''
+
+    def _gpu_assembly_derivatives_source(self, parameters, inputs_threads):
+        return '''        if bool2fit[0]:
+            jacob_local[count] = block_amp * base * dx * inv_sig2
+            count += 1
+        if bool2fit[1]:
+            jacob_local[count] = block_amp * base * dy * inv_sig2
+            count += 1
+        if bool2fit[2]:
+            jacob_local[count] = block_amp * base * r2 * inv_sig3
+            count += 1
+        if bool2fit[3]:
+            jacob_local[count] = base
+            count += 1
+        if bool2fit[4]:
+            jacob_local[count] = 1.0
+            count += 1
+        if bool2fit[5]:
+            jacob_local[count] = d_pixx(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            count += 1
+        if bool2fit[6]:
+            jacob_local[count] = d_pixy(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            count += 1
+        if bool2fit[7]:
+            jacob_local[count] = d_nsig(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            count += 1'''
+
 
 
 # %% Test function run

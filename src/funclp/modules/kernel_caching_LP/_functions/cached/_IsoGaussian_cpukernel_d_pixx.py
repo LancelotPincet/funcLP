@@ -1,4 +1,4 @@
 
 from funclp import ufunc
 import numba as nb
-_IsoGaussian_cpukernel_d_pixx = nb.njit(nogil=True, cache=True)(ufunc.main_functions["IsoGaussian_d_pixx"])
+_IsoGaussian_cpukernel_d_pixx = nb.njit(nogil=True, inline="always", fastmath=False, cache=True)(ufunc.main_functions["IsoGaussian_d_pixx"])

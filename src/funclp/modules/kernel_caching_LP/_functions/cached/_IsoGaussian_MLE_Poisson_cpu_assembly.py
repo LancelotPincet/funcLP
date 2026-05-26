@@ -12,6 +12,8 @@ from ._IsoGaussian_cpukernel_d_offset import _IsoGaussian_cpukernel_d_offset as 
 from ._IsoGaussian_cpukernel_d_pixx import _IsoGaussian_cpukernel_d_pixx as d_pixx
 from ._IsoGaussian_cpukernel_d_pixy import _IsoGaussian_cpukernel_d_pixy as d_pixy
 from ._IsoGaussian_cpukernel_d_nsig import _IsoGaussian_cpukernel_d_nsig as d_nsig
+from funclp.modules.Function_LP._functions.gaussians._gaussians import gausfunc
+
 
 MAX_PARAMS = 8
 NHESS = int(8 * (8 + 1) // 2)
@@ -41,44 +43,57 @@ def _IsoGaussian_MLE_Poisson_cpu_assembly(
         model_pixy = pixy[model]
         model_nsig = nsig[model]
 
+        safe_sig = model_sig
+        if abs(safe_sig) < 1e-12:
+            safe_sig = 1e-12
+        inv_sig2 = 1.0 / (safe_sig * safe_sig)
+        inv_sig3 = inv_sig2 / safe_sig
+
         for point in range(npoints):
             point_x = x[point]
             point_y = y[point]
-            
             point_raw_data = raw_data[model, point]
             point_weight = weights[model, point]
 
-            mod = model_scalar(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+
+            exx = gausfunc(point_x, model_mux, safe_sig, 1.0, 0.0, model_pixx, model_nsig)
+            exy = gausfunc(point_y, model_muy, safe_sig, 1.0, 0.0, model_pixy, model_nsig)
+            base = exx * exy
+            mod = model_amp * base + model_offset
+
             dev = deviance_scalar(point_raw_data, mod, point_weight)
             los = loss_scalar(point_raw_data, mod, point_weight)
             fis = fisher_scalar(point_raw_data, mod, point_weight)
-
             chi_local += dev
+
+            dx = point_x - model_mux
+            dy = point_y - model_muy
+            r2 = dx * dx + dy * dy
 
             count = 0
             if bool2fit[0]:
-                jacob_local[count] = d_mux(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = model_amp * base * dx * inv_sig2
                 count += 1
             if bool2fit[1]:
-                jacob_local[count] = d_muy(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = model_amp * base * dy * inv_sig2
                 count += 1
             if bool2fit[2]:
-                jacob_local[count] = d_sig(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = model_amp * base * r2 * inv_sig3
                 count += 1
             if bool2fit[3]:
-                jacob_local[count] = d_amp(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = base
                 count += 1
             if bool2fit[4]:
-                jacob_local[count] = d_offset(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = 1.0
                 count += 1
             if bool2fit[5]:
-                jacob_local[count] = d_pixx(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = d_pixx(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
                 count += 1
             if bool2fit[6]:
-                jacob_local[count] = d_pixy(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = d_pixy(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
                 count += 1
             if bool2fit[7]:
-                jacob_local[count] = d_nsig(point_x, point_y, model_mux, model_muy, model_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
+                jacob_local[count] = d_nsig(point_x, point_y, model_mux, model_muy, safe_sig, model_amp, model_offset, model_pixx, model_pixy, model_nsig)
                 count += 1
 
             for p in range(nparams):
@@ -89,10 +104,8 @@ def _IsoGaussian_MLE_Poisson_cpu_assembly(
                     hess_local[idx] += Jp * jacob_local[q] * fis
 
         chi2[model] = chi_local
-
         for p in range(nparams):
             gradient[model, p] = grad_local[p]
-
         for p in range(nparams):
             for q in range(p, nparams):
                 idx = p * MAX_PARAMS - (p * (p - 1)) // 2 + (q - p)

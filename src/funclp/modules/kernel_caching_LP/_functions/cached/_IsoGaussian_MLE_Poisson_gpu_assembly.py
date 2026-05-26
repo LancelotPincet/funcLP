@@ -12,13 +12,14 @@ from ._IsoGaussian_gpukernel_d_offset import _IsoGaussian_gpukernel_d_offset as 
 from ._IsoGaussian_gpukernel_d_pixx import _IsoGaussian_gpukernel_d_pixx as d_pixx
 from ._IsoGaussian_gpukernel_d_pixy import _IsoGaussian_gpukernel_d_pixy as d_pixy
 from ._IsoGaussian_gpukernel_d_nsig import _IsoGaussian_gpukernel_d_nsig as d_nsig
+from funclp.modules.Function_LP._functions.gaussians._gaussians import gausfunc
 
 
 TPB = 128
 MAX_PARAMS = 8
 NHESS = int(8 * (8 + 1) // 2)
 
-@nb.cuda.jit(cache=True)
+@nb.cuda.jit(cache=True, fastmath=True)
 def _IsoGaussian_MLE_Poisson_gpu_assembly(
     raw_data, x, y, mux, muy, sig, amp, offset, pixx, pixy, nsig, weights, chi2, gradient, hessian, bool2fit, ignore
 ):
@@ -51,53 +52,58 @@ def _IsoGaussian_MLE_Poisson_gpu_assembly(
     block_pixy = pixy[model]
     block_nsig = nsig[model]
 
+    safe_sig = block_sig
+    if abs(safe_sig) < 1e-12:
+        safe_sig = 1e-12
+    inv_sig2 = 1.0 / (safe_sig * safe_sig)
+    inv_sig3 = inv_sig2 / safe_sig
+
     for point in range(tid, npoints, bdim):
         thread_x = x[point]
         thread_y = y[point]
-        
         thread_raw_data = raw_data[model, point]
         thread_weight = weights[model, point]
 
-        mod = model_scalar(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+
+        exx = gausfunc(thread_x, block_mux, safe_sig, 1.0, 0.0, block_pixx, block_nsig)
+        exy = gausfunc(thread_y, block_muy, safe_sig, 1.0, 0.0, block_pixy, block_nsig)
+        base = exx * exy
+        mod = block_amp * base + block_offset
+
         dev = deviance_scalar(thread_raw_data, mod, thread_weight)
         los = loss_scalar(thread_raw_data, mod, thread_weight)
         fis = fisher_scalar(thread_raw_data, mod, thread_weight)
         chi_local += dev
 
+        dx = thread_x - block_mux
+        dy = thread_y - block_muy
+        r2 = dx * dx + dy * dy
+
         count = 0
-
         if bool2fit[0]:
-            jacob_local[count] = d_mux(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = block_amp * base * dx * inv_sig2
             count += 1
-
         if bool2fit[1]:
-            jacob_local[count] = d_muy(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = block_amp * base * dy * inv_sig2
             count += 1
-
         if bool2fit[2]:
-            jacob_local[count] = d_sig(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = block_amp * base * r2 * inv_sig3
             count += 1
-
         if bool2fit[3]:
-            jacob_local[count] = d_amp(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = base
             count += 1
-
         if bool2fit[4]:
-            jacob_local[count] = d_offset(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = 1.0
             count += 1
-
         if bool2fit[5]:
-            jacob_local[count] = d_pixx(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = d_pixx(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
             count += 1
-
         if bool2fit[6]:
-            jacob_local[count] = d_pixy(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = d_pixy(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
             count += 1
-
         if bool2fit[7]:
-            jacob_local[count] = d_nsig(thread_x, thread_y, block_mux, block_muy, block_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
+            jacob_local[count] = d_nsig(thread_x, thread_y, block_mux, block_muy, safe_sig, block_amp, block_offset, block_pixx, block_pixy, block_nsig)
             count += 1
-
 
         for p in range(nparams):
             Jp = jacob_local[p]

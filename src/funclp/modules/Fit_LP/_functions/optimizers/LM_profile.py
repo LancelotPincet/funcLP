@@ -13,6 +13,7 @@ from funclp.modules.kernel_caching_LP.kernel_caching import kernel_caching
 import math
 from corelp import prop
 import numba as nb
+import time
 
 
 
@@ -44,11 +45,17 @@ class LM(Fit) :
             self.ignore[:] = self.improved # If already improved, we ignore from start
 
             # Damping, Cholseky solve, Parameter steps
+            t_step = time.perf_counter()
             self.damped_step(self.hessian_data, self.hessian_cache, self.gradient_data, self.damping_data, self.damping_min, self.damping_max, self.damping_tau, self.damping_initialized, self.parameters.T, self.parameters_indices, self.parameters_steps, self.bounds_min, self.bounds_max, self.ignore)
+            self._profile_sync_cuda()
+            self._profile_add("damped_step", time.perf_counter() - t_step)
             if not self.damping_initialized : self.damping_initialized = True
     
             # evaluate chi2 after step and check if improving
+            t_step = time.perf_counter()
             self.trial_chi2(self.raw_data, *self.variables, *self.data, *self.parameters, *self.constants, self.weights, self.chi2_data, self.parameters.T, self.parameters_indices, self.parameters_steps, self.gradient_data, self.hessian_cache, self.damping_data, self.nu_data, self.damping_max, self.damping_min, self.converged, self.improved, self.ignore)
+            self._profile_sync_cuda()
+            self._profile_add("trial_chi2", time.perf_counter() - t_step)
             
             # End loop
             if self.improved.all() :
