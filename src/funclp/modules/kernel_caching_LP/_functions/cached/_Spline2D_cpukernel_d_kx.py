@@ -1,4 +1,4 @@
 
 from funclp import ufunc
 import numba as nb
-_Spline2D_cpukernel_d_kx = nb.njit(nogil=True, cache=True)(ufunc.main_functions["Spline2D_d_kx"])
+_Spline2D_cpukernel_d_kx = nb.njit(nogil=True, inline="always", fastmath=False, cache=True)(ufunc.main_functions["Spline2D_d_kx"])
