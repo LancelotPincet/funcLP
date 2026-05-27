@@ -1,4 +1,4 @@
 
 from funclp import ufunc
 import numba as nb
-_Normal_cpukernel_fisher = nb.njit(nogil=True, cache=True)(ufunc.main_functions["Normal_fisher"])
+_Normal_cpukernel_fisher = nb.njit(nogil=True, inline="always", fastmath=True, cache=True)(ufunc.main_functions["Normal_fisher"])

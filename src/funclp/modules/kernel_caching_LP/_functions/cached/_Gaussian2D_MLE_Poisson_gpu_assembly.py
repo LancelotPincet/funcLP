@@ -20,7 +20,7 @@ TPB = 128
 MAX_PARAMS = 8
 NHESS = int(8 * (8 + 1) // 2)
 
-@nb.cuda.jit(cache=True)
+@nb.cuda.jit(cache=True, fastmath=True)
 def _Gaussian2D_MLE_Poisson_gpu_assembly(
     raw_data, x, y, mux, muy, sigx, sigy, amp, offset, pixx, pixy, nsig, theta, weights, chi2, gradient, hessian, bool2fit, ignore
 ):
@@ -58,7 +58,6 @@ def _Gaussian2D_MLE_Poisson_gpu_assembly(
     for point in range(tid, npoints, bdim):
         thread_x = x[point]
         thread_y = y[point]
-        
         thread_raw_data = raw_data[model, point]
         thread_weight = weights[model, point]
 
@@ -69,47 +68,36 @@ def _Gaussian2D_MLE_Poisson_gpu_assembly(
         chi_local += dev
 
         count = 0
-
         if bool2fit[0]:
             jacob_local[count] = d_mux(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[1]:
             jacob_local[count] = d_muy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[2]:
             jacob_local[count] = d_sigx(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[3]:
             jacob_local[count] = d_sigy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[4]:
             jacob_local[count] = d_amp(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[5]:
             jacob_local[count] = d_offset(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[6]:
             jacob_local[count] = d_pixx(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[7]:
             jacob_local[count] = d_pixy(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[8]:
             jacob_local[count] = d_nsig(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
         if bool2fit[9]:
             jacob_local[count] = d_theta(thread_x, thread_y, block_mux, block_muy, block_sigx, block_sigy, block_amp, block_offset, block_pixx, block_pixy, block_nsig, block_theta)
             count += 1
-
 
         for p in range(nparams):
             Jp = jacob_local[p]
